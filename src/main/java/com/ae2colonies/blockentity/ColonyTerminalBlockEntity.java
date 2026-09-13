@@ -134,29 +134,39 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
                     if (grid != null) {
                         try {
                             ICraftingPlan plan = pending.getFuture().get();
-                            if (plan != null && !plan.simulation()) {
-                                ICraftingSubmitResult result = AE2IntegrationHelper.submitCraftingJob(
-                                        grid,
-                                        plan,
-                                        this,
-                                        getActionSource()
-                                );
-                                if (result != null && result.successful() && result.link() != null) {
-                                    craftingTracker.trackJob(
-                                            result.link(),
-                                            UUID.randomUUID().toString(),
-                                            pending.getStack(),
-                                            pending.getAmount(),
-                                            pending.getRequesterName()
+                            if (plan != null) {
+                                AE2Colonies.LOGGER.info("Crafting plan completed for {}. Simulation: {}, Missing: {}", pending.getStack(), plan.simulation(), plan.missingItems() != null ? plan.missingItems().size() : 0);
+                                if (!plan.simulation()) {
+                                    ICraftingSubmitResult result = AE2IntegrationHelper.submitCraftingJob(
+                                            grid,
+                                            plan,
+                                            this,
+                                            getActionSource()
                                     );
-                                    AE2Colonies.LOGGER.info("Started AE2 crafting job for {} x{}", pending.getStack(), pending.getAmount());
+                                    if (result != null && result.successful() && result.link() != null) {
+                                        craftingTracker.trackJob(
+                                                result.link(),
+                                                UUID.randomUUID().toString(),
+                                                pending.getStack(),
+                                                pending.getAmount(),
+                                                pending.getRequesterName()
+                                        );
+                                        AE2Colonies.LOGGER.info("Started AE2 crafting job for {} x{}", pending.getStack(), pending.getAmount());
+                                    } else {
+                                        AE2Colonies.LOGGER.info("submitJob failed or returned unsuccessful result for {}", pending.getStack());
+                                    }
+                                } else {
+                                    AE2Colonies.LOGGER.info("Plan is simulation, skipping submitJob for {}", pending.getStack());
                                 }
+                            } else {
+                                AE2Colonies.LOGGER.info("Crafting plan was null for {}", pending.getStack());
                             }
                         } catch (Exception e) {
                             AE2Colonies.LOGGER.error("Failed to complete crafting calculation for {}", pending.getStack(), e);
                         }
                     }
                 } else if (tickCounter - pending.getCreatedTick() > 200) {
+                    AE2Colonies.LOGGER.info("Canceling pending calculation for {} after timeout", pending.getStack());
                     pendingCalculations.remove(pending);
                     pending.getFuture().cancel(true);
                 }
@@ -331,14 +341,18 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
     }
 
     public void requestCrafting(@NotNull ItemStack stack, long amount, @NotNull String requesterName) {
+        AE2Colonies.LOGGER.info("Entering requestCrafting for {} x{} (requester: {})", stack, amount, requesterName);
         if (!isTerminalOnline() || !isAllowAutocraft() || stack.isEmpty()) {
+            AE2Colonies.LOGGER.info("requestCrafting blocked: online={}, autocraft={}, isEmpty={}", isTerminalOnline(), isAllowAutocraft(), stack.isEmpty());
             return;
         }
         if (isCrafting(stack)) {
+            AE2Colonies.LOGGER.info("requestCrafting blocked: isCrafting() returned true for {}", stack);
             return;
         }
         IGrid grid = getGrid();
         if (grid == null || level == null) {
+            AE2Colonies.LOGGER.info("requestCrafting blocked: grid or level is null");
             return;
         }
 
@@ -357,7 +371,9 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
                     requesterName,
                     tickCounter
             ));
-            AE2Colonies.LOGGER.debug("Queued crafting calculation for {} x{} (by {})", stack, amount, requesterName);
+            AE2Colonies.LOGGER.info("Queued crafting calculation for {} x{} (by {})", stack, amount, requesterName);
+        } else {
+            AE2Colonies.LOGGER.info("requestCrafting future was null for {}", stack);
         }
     }
 

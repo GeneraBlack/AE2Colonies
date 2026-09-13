@@ -61,26 +61,29 @@ public abstract class MinecraftServerMixin {
         AE2Colonies.LOGGER.info("[AE2Colonies] stopServer() completed");
     }
 
-    /**
-     * Inject into waitUntilNextTick to log each spin-loop iteration during shutdown.
-     * This helps identify why the chunk-flush loop never exits.
-     */
-    @Inject(
-            method = "waitUntilNextTick",
-            at = @At("HEAD")
+    private int shutdownSpinCount = 0;
+
+    @org.spongepowered.asm.mixin.injection.Redirect(
+            method = "stopServer",
+            at = @At(value = "INVOKE", target = "Ljava/util/stream/Stream;anyMatch(Ljava/util/function/Predicate;)Z")
     )
-    private void onWaitUntilNextTick(CallbackInfo ci) {
-        if (com.ae2colonies.colony.WarehouseMEBridge.isShuttingDown()) {
-            // Log every 20 calls to avoid flooding
-            try {
-                for (ServerLevel level : getAllLevels()) {
-                    if (level != null && level.getChunkSource().chunkMap.hasWork()) {
-                        AE2Colonies.LOGGER.info("[AE2Colonies] Shutdown spin: Level {} STILL has pending chunk work", level.dimension().location());
-                    }
+    private boolean onStopServerAnyMatch(java.util.stream.Stream<?> stream, java.util.function.Predicate<Object> predicate) {
+        boolean hasWork = stream.anyMatch(predicate);
+        if (com.ae2colonies.colony.WarehouseMEBridge.isShuttingDown() && hasWork) {
+            shutdownSpinCount++;
+            if (shutdownSpinCount == 1) {
+                AE2Colonies.LOGGER.info("[AE2Colonies] Waiting for chunk saving to finish... (iteration 1)");
+            } else if (shutdownSpinCount % 50 == 0 && shutdownSpinCount <= 200) {
+                AE2Colonies.LOGGER.info("[AE2Colonies] Still waiting for chunk saving... (iteration {})", shutdownSpinCount);
+            }
+            
+            if (shutdownSpinCount > 200) {
+                if (shutdownSpinCount == 201) {
+                    AE2Colonies.LOGGER.error("[AE2Colonies] Bypassing infinite chunk saving spin loop after 200 iterations!");
                 }
-            } catch (Exception e) {
-                // ignore
+                return false;
             }
         }
+        return hasWork;
     }
 }
