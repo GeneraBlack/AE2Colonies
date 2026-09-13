@@ -22,6 +22,19 @@ public class ColonyTerminalMenu extends AbstractContainerMenu {
     public static final int BUTTON_TOGGLE_WITHDRAW = 1;
     public static final int BUTTON_TOGGLE_AUTOCRAFT = 2;
 
+    public static final int DATA_ALLOW_DEPOSIT = 0;
+    public static final int DATA_ALLOW_WITHDRAW = 1;
+    public static final int DATA_ALLOW_AUTOCRAFT = 2;
+    public static final int DATA_IS_ONLINE = 3;
+    public static final int DATA_HAS_WAREHOUSE = 4;
+    public static final int DATA_WH_X_LOW = 5;
+    public static final int DATA_WH_X_HIGH = 6;
+    public static final int DATA_WH_Y = 7;
+    public static final int DATA_WH_Z_LOW = 8;
+    public static final int DATA_WH_Z_HIGH = 9;
+    public static final int DATA_ACTIVE_CRAFTS = 10;
+    public static final int TOTAL_DATA_COUNT = 11;
+
     @Nullable
     private final ColonyTerminalBlockEntity blockEntity;
     private final ContainerLevelAccess access;
@@ -29,7 +42,7 @@ public class ColonyTerminalMenu extends AbstractContainerMenu {
 
     // Client constructor
     public ColonyTerminalMenu(int containerId, Inventory playerInv, RegistryFriendlyByteBuf buf) {
-        this(containerId, playerInv, getBlockEntityFromBuf(playerInv, buf), new SimpleContainerData(4));
+        this(containerId, playerInv, getBlockEntityFromBuf(playerInv, buf), new SimpleContainerData(TOTAL_DATA_COUNT));
     }
 
     // Server constructor
@@ -37,27 +50,37 @@ public class ColonyTerminalMenu extends AbstractContainerMenu {
         this(containerId, playerInv, blockEntity, new ContainerData() {
             @Override
             public int get(int index) {
+                BlockPos wh = blockEntity != null ? blockEntity.getLinkedWarehousePos() : null;
                 return switch (index) {
-                    case 0 -> blockEntity.isAllowDeposit() ? 1 : 0;
-                    case 1 -> blockEntity.isAllowWithdraw() ? 1 : 0;
-                    case 2 -> blockEntity.isAllowAutocraft() ? 1 : 0;
-                    case 3 -> blockEntity.isTerminalOnline() ? 1 : 0;
+                    case DATA_ALLOW_DEPOSIT -> (blockEntity != null && blockEntity.isAllowDeposit()) ? 1 : 0;
+                    case DATA_ALLOW_WITHDRAW -> (blockEntity != null && blockEntity.isAllowWithdraw()) ? 1 : 0;
+                    case DATA_ALLOW_AUTOCRAFT -> (blockEntity != null && blockEntity.isAllowAutocraft()) ? 1 : 0;
+                    case DATA_IS_ONLINE -> (blockEntity != null && blockEntity.isTerminalOnline()) ? 1 : 0;
+                    case DATA_HAS_WAREHOUSE -> wh != null ? 1 : 0;
+                    case DATA_WH_X_LOW -> wh != null ? (short) (wh.getX() & 0xFFFF) : 0;
+                    case DATA_WH_X_HIGH -> wh != null ? (short) ((wh.getX() >> 16) & 0xFFFF) : 0;
+                    case DATA_WH_Y -> wh != null ? (short) wh.getY() : 0;
+                    case DATA_WH_Z_LOW -> wh != null ? (short) (wh.getZ() & 0xFFFF) : 0;
+                    case DATA_WH_Z_HIGH -> wh != null ? (short) ((wh.getZ() >> 16) & 0xFFFF) : 0;
+                    case DATA_ACTIVE_CRAFTS -> blockEntity != null ? blockEntity.getCraftingTracker().getActiveJobs().size() : 0;
                     default -> 0;
                 };
             }
 
             @Override
             public void set(int index, int value) {
-                switch (index) {
-                    case 0 -> blockEntity.setAllowDeposit(value != 0);
-                    case 1 -> blockEntity.setAllowWithdraw(value != 0);
-                    case 2 -> blockEntity.setAllowAutocraft(value != 0);
+                if (blockEntity != null) {
+                    switch (index) {
+                        case DATA_ALLOW_DEPOSIT -> blockEntity.setAllowDeposit(value != 0);
+                        case DATA_ALLOW_WITHDRAW -> blockEntity.setAllowWithdraw(value != 0);
+                        case DATA_ALLOW_AUTOCRAFT -> blockEntity.setAllowAutocraft(value != 0);
+                    }
                 }
             }
 
             @Override
             public int getCount() {
-                return 4;
+                return TOTAL_DATA_COUNT;
             }
         });
     }
@@ -97,19 +120,45 @@ public class ColonyTerminalMenu extends AbstractContainerMenu {
     }
 
     public boolean isAllowDeposit() {
-        return data.get(0) != 0;
+        return data.get(DATA_ALLOW_DEPOSIT) != 0;
     }
 
     public boolean isAllowWithdraw() {
-        return data.get(1) != 0;
+        return data.get(DATA_ALLOW_WITHDRAW) != 0;
     }
 
     public boolean isAllowAutocraft() {
-        return data.get(2) != 0;
+        return data.get(DATA_ALLOW_AUTOCRAFT) != 0;
     }
 
     public boolean isTerminalOnline() {
-        return data.get(3) != 0;
+        return data.get(DATA_IS_ONLINE) != 0;
+    }
+
+    public boolean hasLinkedWarehouse() {
+        return data.get(DATA_HAS_WAREHOUSE) != 0;
+    }
+
+    @Nullable
+    public BlockPos getLinkedWarehousePos() {
+        if (!hasLinkedWarehouse()) {
+            return null;
+        }
+        int xLow = data.get(DATA_WH_X_LOW);
+        int xHigh = data.get(DATA_WH_X_HIGH);
+        int x = (xHigh << 16) | (xLow & 0xFFFF);
+
+        int y = data.get(DATA_WH_Y);
+
+        int zLow = data.get(DATA_WH_Z_LOW);
+        int zHigh = data.get(DATA_WH_Z_HIGH);
+        int z = (zHigh << 16) | (zLow & 0xFFFF);
+
+        return new BlockPos(x, y, z);
+    }
+
+    public int getActiveCraftsCount() {
+        return data.get(DATA_ACTIVE_CRAFTS);
     }
 
     @Override

@@ -24,7 +24,7 @@ public class ModBlockEntities {
                                 ColonyTerminalBlockEntity.class,
                                 type,
                                 null,
-                                null
+                                (level, pos, state, be) -> be.serverTick()
                         );
                         return type;
                     }

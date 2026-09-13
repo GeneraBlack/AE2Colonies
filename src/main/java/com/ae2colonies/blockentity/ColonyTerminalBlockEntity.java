@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.entity.player.Inventory;
@@ -55,10 +56,31 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
                 .setFlags(GridFlags.REQUIRE_CHANNEL);
     }
 
+    private int tickCounter = 0;
+
     @Override
     public void onReady() {
         super.onReady();
         WarehouseMEBridge.registerTerminal(this);
+    }
+
+    public void serverTick() {
+        if (level == null || level.isClientSide()) {
+            return;
+        }
+
+        tickCounter++;
+        // If not yet linked, retry every 40 ticks (2 seconds)
+        // If linked, periodically re-verify every 200 ticks (10 seconds)
+        if (linkedWarehousePos == null) {
+            if (tickCounter % 40 == 0) {
+                WarehouseMEBridge.registerTerminal(this);
+            }
+        } else {
+            if (tickCounter % 200 == 0) {
+                WarehouseMEBridge.registerTerminal(this);
+            }
+        }
     }
 
     @Override
@@ -163,6 +185,28 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
         this.linkedColonyId = colonyId;
         this.linkedWarehousePos = warehousePos;
         setChanged();
+        markForUpdate();
+    }
+
+    @Override
+    protected void writeToStream(RegistryFriendlyByteBuf data) {
+        super.writeToStream(data);
+        data.writeInt(linkedColonyId);
+        data.writeBoolean(linkedWarehousePos != null);
+        if (linkedWarehousePos != null) {
+            data.writeBlockPos(linkedWarehousePos);
+        }
+    }
+
+    @Override
+    protected boolean readFromStream(RegistryFriendlyByteBuf data) {
+        boolean changed = super.readFromStream(data);
+        int oldColony = this.linkedColonyId;
+        BlockPos oldWh = this.linkedWarehousePos;
+        this.linkedColonyId = data.readInt();
+        boolean hasWh = data.readBoolean();
+        this.linkedWarehousePos = hasWh ? data.readBlockPos() : null;
+        return changed || oldColony != this.linkedColonyId || (oldWh == null ? this.linkedWarehousePos != null : !oldWh.equals(this.linkedWarehousePos));
     }
 
     public boolean isTerminalOnline() {

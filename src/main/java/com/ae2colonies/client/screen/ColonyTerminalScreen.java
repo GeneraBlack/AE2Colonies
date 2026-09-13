@@ -109,9 +109,8 @@ public class ColonyTerminalScreen extends AbstractContainerScreen<ColonyTerminal
                 : Component.translatable("gui.ae2colonies.status_offline").withColor(0xFF5555);
         guiGraphics.drawString(this.font, statusText, 8, 20, 0xFFFFFF, false);
 
-        ColonyTerminalBlockEntity be = menu.getBlockEntity();
-        if (be != null && be.getLinkedWarehousePos() != null) {
-            BlockPos wh = be.getLinkedWarehousePos();
+        if (menu.hasLinkedWarehouse() && menu.getLinkedWarehousePos() != null) {
+            BlockPos wh = menu.getLinkedWarehousePos();
             guiGraphics.drawString(this.font,
                     Component.literal("Warehouse: [" + wh.getX() + ", " + wh.getY() + ", " + wh.getZ() + "]"),
                     8, 32, 0xAAAAAA, false);
@@ -122,11 +121,9 @@ public class ColonyTerminalScreen extends AbstractContainerScreen<ColonyTerminal
         }
 
         // Active craft jobs count
-        if (be != null) {
-            List<ColonyCraftingTracker.CraftingJobInfo> activeJobs = be.getCraftingTracker().getActiveJobs();
-            String craftInfo = "Active Crafts: " + activeJobs.size();
-            guiGraphics.drawString(this.font, craftInfo, 8, 118, 0x88CCFF, false);
-        }
+        int activeJobsCount = menu.getActiveCraftsCount();
+        String craftInfo = "Active Crafts: " + activeJobsCount;
+        guiGraphics.drawString(this.font, craftInfo, 8, 118, 0x88CCFF, false);
 
         guiGraphics.drawString(this.font, this.playerInventoryTitle, 8, 128, 0xAAAAAA, false);
     }

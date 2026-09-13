@@ -77,6 +77,9 @@ public class ColonyTerminalBlock extends AEBaseEntityBlock<ColonyTerminalBlockEn
         if (!level.isClientSide()) {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof ColonyTerminalBlockEntity terminal) {
+                if (terminal.getLinkedWarehousePos() == null) {
+                    WarehouseMEBridge.registerTerminal(terminal);
+                }
                 player.openMenu(terminal, pos);
             }
         }
