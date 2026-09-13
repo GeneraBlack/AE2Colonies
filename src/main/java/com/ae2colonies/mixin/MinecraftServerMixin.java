@@ -29,14 +29,8 @@ public abstract class MinecraftServerMixin {
     private boolean onStopServerAnyMatch(Stream<?> stream, Predicate<Object> predicate) {
         boolean hasWork = stream.anyMatch(predicate);
         if (com.ae2colonies.colony.WarehouseMEBridge.isShuttingDown() && hasWork) {
-            shutdownSpinCount++;
-            if (shutdownSpinCount == 1) {
-                AE2Colonies.LOGGER.info("[AE2Colonies] Flushed chunk unloads during server shutdown (pass 1).");
-            }
-            if (shutdownSpinCount > 5) {
-                AE2Colonies.LOGGER.info("[AE2Colonies] Bypassing NeoForge infinite chunk spin loop after 5 passes, proceeding directly to world save.");
-                return false;
-            }
+            AE2Colonies.LOGGER.info("[AE2Colonies] Bypassing NeoForge infinite chunk spin loop immediately, proceeding directly to world save.");
+            return false;
         }
         return hasWork;
     }

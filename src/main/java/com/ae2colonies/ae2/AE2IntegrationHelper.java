@@ -193,7 +193,7 @@ public class AE2IntegrationHelper {
 
     public static boolean isCraftable(@Nullable IGrid grid, @NotNull ItemStack stack) {
         ICraftingService craftingService = getCraftingService(grid);
-        if (craftingService == null) {
+        if (craftingService == null || craftingService.getCpus().isEmpty()) {
             return false;
         }
 

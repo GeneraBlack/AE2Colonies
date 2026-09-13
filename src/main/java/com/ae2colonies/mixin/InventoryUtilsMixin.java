@@ -129,6 +129,9 @@ public abstract class InventoryUtilsMixin {
                 }
 
                 if (terminal.isAllowAutocraft() && terminal.getGrid() != null) {
+                    if (terminal.getGrid().getCraftingService().getCpus().isEmpty()) {
+                        continue;
+                    }
                     int needed = count - total;
                     if (needed > 0) {
                         for (appeng.api.stacks.AEKey key : terminal.getGrid().getCraftingService().getCraftables(k -> k instanceof appeng.api.stacks.AEItemKey)) {
