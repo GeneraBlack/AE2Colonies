@@ -61,29 +61,15 @@ public abstract class MinecraftServerMixin {
         AE2Colonies.LOGGER.info("[AE2Colonies] stopServer() completed");
     }
 
-    private int shutdownSpinCount = 0;
-
     @org.spongepowered.asm.mixin.injection.Redirect(
             method = "stopServer",
             at = @At(value = "INVOKE", target = "Ljava/util/stream/Stream;anyMatch(Ljava/util/function/Predicate;)Z")
     )
     private boolean onStopServerAnyMatch(java.util.stream.Stream<?> stream, java.util.function.Predicate<Object> predicate) {
-        boolean hasWork = stream.anyMatch(predicate);
-        if (com.ae2colonies.colony.WarehouseMEBridge.isShuttingDown() && hasWork) {
-            shutdownSpinCount++;
-            if (shutdownSpinCount == 1) {
-                AE2Colonies.LOGGER.info("[AE2Colonies] Waiting for chunk saving to finish... (iteration 1)");
-            } else if (shutdownSpinCount % 50 == 0 && shutdownSpinCount <= 200) {
-                AE2Colonies.LOGGER.info("[AE2Colonies] Still waiting for chunk saving... (iteration {})", shutdownSpinCount);
-            }
-            
-            if (shutdownSpinCount > 200) {
-                if (shutdownSpinCount == 201) {
-                    AE2Colonies.LOGGER.error("[AE2Colonies] Bypassing infinite chunk saving spin loop after 200 iterations!");
-                }
-                return false;
-            }
+        if (com.ae2colonies.colony.WarehouseMEBridge.isShuttingDown()) {
+            AE2Colonies.LOGGER.info("[AE2Colonies] Bypassing chunk saving spin loop during shutdown to prevent hang.");
+            return false;
         }
-        return hasWork;
+        return stream.anyMatch(predicate);
     }
 }

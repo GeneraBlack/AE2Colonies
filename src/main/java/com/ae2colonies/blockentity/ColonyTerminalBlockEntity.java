@@ -153,7 +153,7 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
                                         );
                                         AE2Colonies.LOGGER.info("Started AE2 crafting job for {} x{}", pending.getStack(), pending.getAmount());
                                     } else {
-                                        AE2Colonies.LOGGER.info("submitJob failed or returned unsuccessful result for {}", pending.getStack());
+                                        AE2Colonies.LOGGER.info("submitJob failed or returned unsuccessful result for {}. Result: {}", pending.getStack(), result != null ? result.errorCode() : "null");
                                     }
                                 } else {
                                     AE2Colonies.LOGGER.info("Plan is simulation, skipping submitJob for {}", pending.getStack());
@@ -327,13 +327,6 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
         for (PendingCalculation pending : pendingCalculations) {
             if (ItemStack.isSameItemSameComponents(pending.getStack(), stack)
                     || (pending.getStack().getItem() == stack.getItem())) {
-                return true;
-            }
-        }
-        IGrid grid = getGrid();
-        if (grid != null) {
-            AEItemKey key = AEItemKey.of(stack);
-            if (key != null && grid.getCraftingService().isRequesting(key)) {
                 return true;
             }
         }
