@@ -47,7 +47,7 @@ public class WarehouseMEBridge {
                 colony = IColonyManager.getInstance().getClosestIColony(level, pos);
             }
         } catch (Exception e) {
-            AE2Colonies.LOGGER.debug("Failed to look up colony for terminal at {}: {}", pos, e.getMessage());
+            AE2Colonies.LOGGER.info("Failed to look up colony for terminal at {}: {}", pos, e.getMessage());
             return;
         }
 
@@ -64,7 +64,7 @@ public class WarehouseMEBridge {
         try {
             warehouses = sm.getWareHouses();
         } catch (Exception e) {
-            AE2Colonies.LOGGER.debug("Failed to get warehouses for colony {}: {}", colony.getID(), e.getMessage());
+            AE2Colonies.LOGGER.info("Failed to get warehouses for colony {}: {}", colony.getID(), e.getMessage());
             return;
         }
 
@@ -102,7 +102,7 @@ public class WarehouseMEBridge {
             try {
                 warehouse = sm.getClosestWarehouseInColony(pos);
             } catch (Exception e) {
-                AE2Colonies.LOGGER.debug("Failed to find closest warehouse: {}", e.getMessage());
+                AE2Colonies.LOGGER.info("Failed to find closest warehouse: {}", e.getMessage());
                 return;
             }
         }
