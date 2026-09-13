@@ -1,5 +1,6 @@
 package com.ae2colonies.mixin;
 
+import com.ae2colonies.AE2Colonies;
 import com.ae2colonies.ae2.AE2IntegrationHelper;
 import com.ae2colonies.blockentity.ColonyTerminalBlockEntity;
 import com.ae2colonies.colony.WarehouseMEBridge;
@@ -55,7 +56,11 @@ public abstract class InventoryUtilsMixin {
                 }
 
                 if (terminal.isAllowWithdraw()) {
-                    total += AE2IntegrationHelper.getAvailableCount(terminal.getGrid(), is, matchNBT);
+                    int ae2Count = AE2IntegrationHelper.getAvailableCount(terminal.getGrid(), is, matchNBT);
+                    if (ae2Count > 0) {
+                        total += ae2Count;
+                        AE2Colonies.LOGGER.debug("InventoryUtilsMixin(Storage): AE2 has {} of {} (total now {})", ae2Count, is, total);
+                    }
                     if (total >= count) {
                         cir.setReturnValue(total);
                         return;
@@ -68,6 +73,7 @@ public abstract class InventoryUtilsMixin {
                         if (AE2IntegrationHelper.isCraftable(terminal.getGrid(), is)
                                 || terminal.canSynthesizeDOBlock(is, needed)) {
                             total += needed;
+                            AE2Colonies.LOGGER.debug("InventoryUtilsMixin(Storage): AE2 can craft {} (total now {})", is, total);
                             cir.setReturnValue(total);
                             return;
                         }
@@ -111,7 +117,11 @@ public abstract class InventoryUtilsMixin {
                 }
 
                 if (terminal.isAllowWithdraw()) {
-                    total += AE2IntegrationHelper.getAvailableCount(terminal.getGrid(), stackPredicate);
+                    int ae2Count = AE2IntegrationHelper.getAvailableCount(terminal.getGrid(), stackPredicate);
+                    if (ae2Count > 0) {
+                        total += ae2Count;
+                        AE2Colonies.LOGGER.debug("InventoryUtilsMixin(Predicate): AE2 has {} matching items (total now {})", ae2Count, total);
+                    }
                     if (total >= count) {
                         cir.setReturnValue(total);
                         return;
@@ -126,6 +136,7 @@ public abstract class InventoryUtilsMixin {
                                 ItemStack candidate = itemKey.toStack(needed);
                                 if (stackPredicate.test(candidate)) {
                                     total += needed;
+                                    AE2Colonies.LOGGER.debug("InventoryUtilsMixin(Predicate): AE2 can craft {} (total now {})", candidate, total);
                                     cir.setReturnValue(total);
                                     return;
                                 }

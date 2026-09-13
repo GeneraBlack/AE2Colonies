@@ -117,10 +117,13 @@ public abstract class TileEntityWareHouseMixin {
                 if (terminal.isAllowAutocraft()) {
                     com.minecolonies.api.colony.requestsystem.request.IRequest<? extends com.minecolonies.api.colony.requestsystem.requestable.IDeliverable> activeReq =
                             com.ae2colonies.colony.WarehouseRequestContext.getCurrentRequest();
+
                     if (activeReq != null) {
                         com.minecolonies.api.colony.requestsystem.requestable.IDeliverable deliverable = activeReq.getRequest();
                         int count = deliverable.getCount();
+
                         if (deliverable instanceof com.minecolonies.api.colony.requestsystem.requestable.IConcreteDeliverable concrete) {
+                            // Concrete deliverable: try each specific requested item
                             for (ItemStack requestedStack : concrete.getRequestedItems()) {
                                 if (requestedStack.isEmpty() || !itemStackSelectionPredicate.test(requestedStack)) {
                                     continue;
@@ -141,8 +144,22 @@ public abstract class TileEntityWareHouseMixin {
                                     break;
                                 }
                             }
+                        } else if (terminal.getGrid() != null) {
+                            // Non-concrete deliverable (Tool, Food, etc.): iterate AE2 craftables
+                            // and match using the request predicate (which calls deliverable.matches())
+                            for (appeng.api.stacks.AEKey key : terminal.getGrid().getCraftingService().getCraftables(k -> k instanceof appeng.api.stacks.AEItemKey)) {
+                                if (key instanceof appeng.api.stacks.AEItemKey itemKey) {
+                                    ItemStack candidate = itemKey.toStack(count);
+                                    if (itemStackSelectionPredicate.test(candidate)) {
+                                        terminal.requestCrafting(candidate, count, "Colony Request");
+                                        list.add(new Tuple<>(candidate, terminal.getBlockPos()));
+                                        break;
+                                    }
+                                }
+                            }
                         }
                     } else if (terminal.getGrid() != null) {
+                        // No active request context — fallback: iterate craftables and match
                         for (appeng.api.stacks.AEKey key : terminal.getGrid().getCraftingService().getCraftables(k -> k instanceof appeng.api.stacks.AEItemKey)) {
                             if (key instanceof appeng.api.stacks.AEItemKey itemKey) {
                                 ItemStack candidate = itemKey.toStack(64);

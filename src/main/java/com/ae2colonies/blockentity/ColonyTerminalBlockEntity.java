@@ -107,6 +107,11 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
             return;
         }
 
+        // Don't do any work during server shutdown
+        if (WarehouseMEBridge.isShuttingDown()) {
+            return;
+        }
+
         tickCounter++;
         // If not yet linked, retry every 40 ticks (2 seconds)
         // If linked, periodically re-verify every 200 ticks (10 seconds)
@@ -161,6 +166,11 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
 
     @Override
     public void setRemoved() {
+        // Cancel all pending crafting calculations
+        for (PendingCalculation pending : pendingCalculations) {
+            pending.getFuture().cancel(true);
+        }
+        pendingCalculations.clear();
         WarehouseMEBridge.unregisterTerminal(this);
         super.setRemoved();
     }
