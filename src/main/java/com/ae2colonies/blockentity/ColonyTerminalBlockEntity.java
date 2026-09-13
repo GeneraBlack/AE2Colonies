@@ -142,6 +142,7 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
                             if (plan != null) {
                                 AE2Colonies.LOGGER.info("Crafting plan completed for {}. Simulation: {}, Missing: {}", pending.getStack(), plan.simulation(), plan.missingItems() != null ? plan.missingItems().size() : 0);
                                 
+                                int cpuCount = grid.getCraftingService().getCpus().size();
                                 ICraftingSubmitResult result = AE2IntegrationHelper.submitCraftingJob(
                                         grid,
                                         plan,
@@ -160,8 +161,11 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
                                     );
                                     setChanged();
                                 } else {
-                                    AE2Colonies.LOGGER.info("submitJob failed or returned unsuccessful result for {} (errorCode: {})", 
-                                            pending.getStack(), result != null ? result.errorCode() : "null");
+                                    AE2Colonies.LOGGER.warn("submitJob failed for {} (errorCode: {}, active CPUs on grid: {})", 
+                                            pending.getStack(), result != null ? result.errorCode() : "null", cpuCount);
+                                    if (result != null && result.errorCode() == appeng.api.networking.crafting.CraftingSubmitErrorCode.NO_CPU_FOUND) {
+                                        AE2Colonies.LOGGER.warn(">>> WARNING: No Crafting CPU found on ME network! Autocrafting requires at least one Crafting CPU (Crafting Storage multiblock) connected to the ME network. <<<");
+                                    }
                                 }
                             } else {
                                 AE2Colonies.LOGGER.info("Crafting plan was null for {}", pending.getStack());
@@ -237,6 +241,21 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
     }
 
     public IActionSource getActionSource() {
+        if (level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+            IGridNode node = getMainNode().getNode();
+            if (node != null) {
+                java.util.UUID ownerId = node.getOwningPlayerProfileId();
+                if (ownerId != null) {
+                    Player player = serverLevel.getPlayerByUUID(ownerId);
+                    if (player != null) {
+                        return IActionSource.ofPlayer(player, this);
+                    }
+                }
+            }
+            if (!serverLevel.players().isEmpty()) {
+                return IActionSource.ofPlayer(serverLevel.players().get(0), this);
+            }
+        }
         return actionSource;
     }
 
