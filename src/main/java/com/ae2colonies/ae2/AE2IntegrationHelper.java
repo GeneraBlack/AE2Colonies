@@ -222,9 +222,13 @@ public class AE2IntegrationHelper {
             return null;
         }
 
+        // ICraftingSimulationRequester provides the action source for the crafting simulation
+        appeng.api.networking.crafting.ICraftingSimulationRequester simRequester = () ->
+                IActionSource.ofMachine(requester);
+
         return craftingService.beginCraftingCalculation(
                 level,
-                null,
+                simRequester,
                 key,
                 amount,
                 CalculationStrategy.REPORT_MISSING_ITEMS

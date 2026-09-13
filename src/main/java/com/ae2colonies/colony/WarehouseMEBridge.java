@@ -137,19 +137,19 @@ public class WarehouseMEBridge {
 
     public static void beginShutdown() {
         shuttingDown = true;
-        AE2Colonies.LOGGER.debug("WarehouseMEBridge: shutdown flag set");
+        AE2Colonies.LOGGER.info("WarehouseMEBridge: shutdown flag set");
     }
 
     public static void clearCaches() {
         shuttingDown = true;
         WAREHOUSE_TERMINALS.clear();
-        AE2Colonies.LOGGER.debug("Cleared WarehouseMEBridge terminal caches");
+        AE2Colonies.LOGGER.info("Cleared WarehouseMEBridge terminal caches");
     }
 
     public static void resetForNewServer() {
         WAREHOUSE_TERMINALS.clear();
         shuttingDown = false;
-        AE2Colonies.LOGGER.debug("WarehouseMEBridge reset for new server");
+        AE2Colonies.LOGGER.info("WarehouseMEBridge reset for new server");
     }
 
     public static void onLevelUnload(@NotNull Level level) {
