@@ -112,6 +112,11 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
             return;
         }
 
+        Runnable task;
+        while ((task = mainThreadTasks.poll()) != null) {
+            task.run();
+        }
+
         tickCounter++;
         // If not yet linked, retry every 40 ticks (2 seconds)
         // If linked, periodically re-verify every 200 ticks (10 seconds)
@@ -136,27 +141,27 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
                             ICraftingPlan plan = pending.getFuture().get();
                             if (plan != null) {
                                 AE2Colonies.LOGGER.info("Crafting plan completed for {}. Simulation: {}, Missing: {}", pending.getStack(), plan.simulation(), plan.missingItems() != null ? plan.missingItems().size() : 0);
-                                if (!plan.simulation()) {
-                                    ICraftingSubmitResult result = AE2IntegrationHelper.submitCraftingJob(
-                                            grid,
-                                            plan,
-                                            this,
-                                            getActionSource()
+                                
+                                ICraftingSubmitResult result = AE2IntegrationHelper.submitCraftingJob(
+                                        grid,
+                                        plan,
+                                        this,
+                                        getActionSource()
+                                );
+
+                                if (result != null && result.successful() && result.link() != null) {
+                                    AE2Colonies.LOGGER.info("submitJob successful for {}. Tracking job...", pending.getStack());
+                                    craftingTracker.trackJob(
+                                            result.link(),
+                                            java.util.UUID.randomUUID().toString(),
+                                            pending.getStack(),
+                                            pending.getAmount(),
+                                            pending.getRequesterName()
                                     );
-                                    if (result != null && result.successful() && result.link() != null) {
-                                        craftingTracker.trackJob(
-                                                result.link(),
-                                                UUID.randomUUID().toString(),
-                                                pending.getStack(),
-                                                pending.getAmount(),
-                                                pending.getRequesterName()
-                                        );
-                                        AE2Colonies.LOGGER.info("Started AE2 crafting job for {} x{}", pending.getStack(), pending.getAmount());
-                                    } else {
-                                        AE2Colonies.LOGGER.info("submitJob failed or returned unsuccessful result for {}. Result: {}", pending.getStack(), result != null ? result.errorCode() : "null");
-                                    }
+                                    setChanged();
                                 } else {
-                                    AE2Colonies.LOGGER.info("Plan is simulation, skipping submitJob for {}", pending.getStack());
+                                    AE2Colonies.LOGGER.info("submitJob failed or returned unsuccessful result for {} (errorCode: {})", 
+                                            pending.getStack(), result != null ? result.errorCode() : "null");
                                 }
                             } else {
                                 AE2Colonies.LOGGER.info("Crafting plan was null for {}", pending.getStack());
@@ -331,6 +336,12 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
             }
         }
         return false;
+    }
+
+    private final java.util.concurrent.ConcurrentLinkedQueue<Runnable> mainThreadTasks = new java.util.concurrent.ConcurrentLinkedQueue<>();
+
+    public void queueCraftingRequest(@NotNull ItemStack stack, long amount, @NotNull String requesterName) {
+        mainThreadTasks.add(() -> requestCrafting(stack, amount, requesterName));
     }
 
     public void requestCrafting(@NotNull ItemStack stack, long amount, @NotNull String requesterName) {

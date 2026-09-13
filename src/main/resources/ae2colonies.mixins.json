@@ -7,8 +7,7 @@
     "TileEntityWareHouseMixin",
     "EntityAIWorkDeliverymanMixin",
     "InventoryUtilsMixin",
-    "AbstractWarehouseRequestResolverMixin",
-    "MinecraftServerMixin"
+    "AbstractWarehouseRequestResolverMixin"
   ],
   "client": [],
   "injectors": {

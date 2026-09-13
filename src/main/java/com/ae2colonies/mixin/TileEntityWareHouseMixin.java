@@ -138,7 +138,7 @@ public abstract class TileEntityWareHouseMixin {
                                     }
                                 } else if (AE2IntegrationHelper.isCraftable(terminal.getGrid(), requestedStack)) {
                                     String requesterName = "Colony Request";
-                                    terminal.requestCrafting(requestedStack, count, requesterName);
+                                    terminal.queueCraftingRequest(requestedStack, count, requesterName);
                                     ItemStack craftStack = requestedStack.copyWithCount(count);
                                     list.add(new Tuple<>(craftStack, terminal.getBlockPos()));
                                     break;
@@ -151,7 +151,7 @@ public abstract class TileEntityWareHouseMixin {
                                 if (key instanceof appeng.api.stacks.AEItemKey itemKey) {
                                     ItemStack candidate = itemKey.toStack(count);
                                     if (itemStackSelectionPredicate.test(candidate)) {
-                                        terminal.requestCrafting(candidate, count, "Colony Request");
+                                        terminal.queueCraftingRequest(candidate, count, "Colony Request");
                                         list.add(new Tuple<>(candidate, terminal.getBlockPos()));
                                         break;
                                     }
@@ -164,7 +164,7 @@ public abstract class TileEntityWareHouseMixin {
                             if (key instanceof appeng.api.stacks.AEItemKey itemKey) {
                                 ItemStack candidate = itemKey.toStack(64);
                                 if (itemStackSelectionPredicate.test(candidate)) {
-                                    terminal.requestCrafting(candidate, 64, "Colony Request");
+                                    terminal.queueCraftingRequest(candidate, 64, "Colony Request");
                                     list.add(new Tuple<>(candidate, terminal.getBlockPos()));
                                     break;
                                 }
