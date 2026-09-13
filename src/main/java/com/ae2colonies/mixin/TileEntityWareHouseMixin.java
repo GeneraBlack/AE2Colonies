@@ -103,10 +103,56 @@ public abstract class TileEntityWareHouseMixin {
         if (warehouse != null) {
             List<Tuple<ItemStack, BlockPos>> list = cir.getReturnValue();
             for (ColonyTerminalBlockEntity terminal : WarehouseMEBridge.getTerminalsForWarehouse(warehouse)) {
-                if (terminal.isTerminalOnline() && terminal.isAllowWithdraw()) {
+                if (!terminal.isTerminalOnline()) {
+                    continue;
+                }
+
+                if (terminal.isAllowWithdraw()) {
                     List<ItemStack> ae2Matches = AE2IntegrationHelper.getMatchingItemStacks(terminal.getGrid(), itemStackSelectionPredicate);
                     for (ItemStack stack : ae2Matches) {
                         list.add(new Tuple<>(stack, terminal.getBlockPos()));
+                    }
+                }
+
+                if (terminal.isAllowAutocraft()) {
+                    com.minecolonies.api.colony.requestsystem.request.IRequest<? extends com.minecolonies.api.colony.requestsystem.requestable.IDeliverable> activeReq =
+                            AbstractWarehouseRequestResolverMixin.getCurrentRequest();
+                    if (activeReq != null) {
+                        com.minecolonies.api.colony.requestsystem.requestable.IDeliverable deliverable = activeReq.getRequest();
+                        int count = deliverable.getCount();
+                        if (deliverable instanceof com.minecolonies.api.colony.requestsystem.requestable.IConcreteDeliverable concrete) {
+                            for (ItemStack requestedStack : concrete.getRequestedItems()) {
+                                if (requestedStack.isEmpty() || !itemStackSelectionPredicate.test(requestedStack)) {
+                                    continue;
+                                }
+
+                                if (com.ae2colonies.domum.DomumOrnamentumHelper.isDOBlock(requestedStack)) {
+                                    if (terminal.canSynthesizeDOBlock(requestedStack, count)) {
+                                        terminal.synthesizeDOBlock(requestedStack, count);
+                                        ItemStack synthesized = requestedStack.copyWithCount(count);
+                                        list.add(new Tuple<>(synthesized, terminal.getBlockPos()));
+                                        break;
+                                    }
+                                } else if (AE2IntegrationHelper.isCraftable(terminal.getGrid(), requestedStack)) {
+                                    String requesterName = "Colony Request";
+                                    terminal.requestCrafting(requestedStack, count, requesterName);
+                                    ItemStack craftStack = requestedStack.copyWithCount(count);
+                                    list.add(new Tuple<>(craftStack, terminal.getBlockPos()));
+                                    break;
+                                }
+                            }
+                        }
+                    } else if (terminal.getGrid() != null) {
+                        for (appeng.api.stacks.AEKey key : terminal.getGrid().getCraftingService().getCraftables(k -> k instanceof appeng.api.stacks.AEItemKey)) {
+                            if (key instanceof appeng.api.stacks.AEItemKey itemKey) {
+                                ItemStack candidate = itemKey.toStack(64);
+                                if (itemStackSelectionPredicate.test(candidate)) {
+                                    terminal.requestCrafting(candidate, 64, "Colony Request");
+                                    list.add(new Tuple<>(candidate, terminal.getBlockPos()));
+                                    break;
+                                }
+                            }
+                        }
                     }
                 }
             }

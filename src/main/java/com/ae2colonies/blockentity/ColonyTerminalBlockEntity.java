@@ -12,9 +12,16 @@ import appeng.api.networking.security.IActionHost;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEKey;
 import appeng.blockentity.grid.AENetworkedBlockEntity;
+import appeng.api.config.PowerMultiplier;
+import appeng.api.networking.crafting.ICraftingPlan;
+import appeng.api.networking.crafting.ICraftingSubmitResult;
+import appeng.api.stacks.AEItemKey;
+import com.ae2colonies.AE2Colonies;
+import com.ae2colonies.ae2.AE2IntegrationHelper;
 import com.ae2colonies.ae2.ColonyCraftingTracker;
 import com.ae2colonies.block.ColonyTerminalBlock;
 import com.ae2colonies.colony.WarehouseMEBridge;
+import com.ae2colonies.domum.DomumOrnamentumHelper;
 import com.ae2colonies.init.ModBlockEntities;
 import com.ae2colonies.menu.ColonyTerminalMenu;
 import com.google.common.collect.ImmutableSet;
@@ -27,12 +34,42 @@ import net.minecraft.world.MenuProvider;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Future;
+
 public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
         implements ICraftingRequester, IActionHost, MenuProvider {
+
+    public static class PendingCalculation {
+        private final Future<ICraftingPlan> future;
+        private final ItemStack stack;
+        private final long amount;
+        private final String requesterName;
+        private final long createdTick;
+
+        public PendingCalculation(Future<ICraftingPlan> future, ItemStack stack, long amount, String requesterName, long createdTick) {
+            this.future = future;
+            this.stack = stack;
+            this.amount = amount;
+            this.requesterName = requesterName;
+            this.createdTick = createdTick;
+        }
+
+        public Future<ICraftingPlan> getFuture() { return future; }
+        public ItemStack getStack() { return stack; }
+        public long getAmount() { return amount; }
+        public String getRequesterName() { return requesterName; }
+        public long getCreatedTick() { return createdTick; }
+    }
 
     private boolean allowDeposit = true;
     private boolean allowWithdraw = true;
@@ -43,6 +80,7 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
     private BlockPos linkedWarehousePos = null;
 
     private final ColonyCraftingTracker craftingTracker = new ColonyCraftingTracker();
+    private final List<PendingCalculation> pendingCalculations = new CopyOnWriteArrayList<>();
     private final IActionSource actionSource = IActionSource.ofMachine(this);
 
     public ColonyTerminalBlockEntity(BlockPos pos, BlockState state) {
@@ -79,6 +117,44 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
         } else {
             if (tickCounter % 200 == 0) {
                 WarehouseMEBridge.registerTerminal(this);
+            }
+        }
+
+        // Process pending crafting calculations asynchronously
+        if (!pendingCalculations.isEmpty()) {
+            IGrid grid = getGrid();
+            for (PendingCalculation pending : pendingCalculations) {
+                if (pending.getFuture().isDone()) {
+                    pendingCalculations.remove(pending);
+                    if (grid != null) {
+                        try {
+                            ICraftingPlan plan = pending.getFuture().get();
+                            if (plan != null && !plan.simulation()) {
+                                ICraftingSubmitResult result = AE2IntegrationHelper.submitCraftingJob(
+                                        grid,
+                                        plan,
+                                        this,
+                                        getActionSource()
+                                );
+                                if (result != null && result.successful() && result.link() != null) {
+                                    craftingTracker.trackJob(
+                                            result.link(),
+                                            UUID.randomUUID().toString(),
+                                            pending.getStack(),
+                                            pending.getAmount(),
+                                            pending.getRequesterName()
+                                    );
+                                    AE2Colonies.LOGGER.info("Started AE2 crafting job for {} x{}", pending.getStack(), pending.getAmount());
+                                }
+                            }
+                        } catch (Exception e) {
+                            AE2Colonies.LOGGER.error("Failed to complete crafting calculation for {}", pending.getStack(), e);
+                        }
+                    }
+                } else if (tickCounter - pending.getCreatedTick() > 200) {
+                    pendingCalculations.remove(pending);
+                    pending.getFuture().cancel(true);
+                }
             }
         }
     }
@@ -218,6 +294,145 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
         return getMainNode().getGrid();
     }
 
+    public boolean isCrafting(@NotNull ItemStack stack) {
+        if (stack.isEmpty()) {
+            return false;
+        }
+        for (ColonyCraftingTracker.CraftingJobInfo job : craftingTracker.getActiveJobs()) {
+            if (ItemStack.isSameItemSameComponents(job.getStack(), stack)
+                    || (job.getStack().getItem() == stack.getItem())) {
+                return true;
+            }
+        }
+        for (PendingCalculation pending : pendingCalculations) {
+            if (ItemStack.isSameItemSameComponents(pending.getStack(), stack)
+                    || (pending.getStack().getItem() == stack.getItem())) {
+                return true;
+            }
+        }
+        IGrid grid = getGrid();
+        if (grid != null) {
+            AEItemKey key = AEItemKey.of(stack);
+            if (key != null && grid.getCraftingService().isRequesting(key)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void requestCrafting(@NotNull ItemStack stack, long amount, @NotNull String requesterName) {
+        if (!isTerminalOnline() || !isAllowAutocraft() || stack.isEmpty()) {
+            return;
+        }
+        if (isCrafting(stack)) {
+            return;
+        }
+        IGrid grid = getGrid();
+        if (grid == null || level == null) {
+            return;
+        }
+
+        Future<ICraftingPlan> future = AE2IntegrationHelper.requestCraftingCalculation(
+                level,
+                grid,
+                this,
+                stack,
+                amount
+        );
+        if (future != null) {
+            pendingCalculations.add(new PendingCalculation(
+                    future,
+                    stack.copyWithCount((int) Math.min(amount, stack.getMaxStackSize())),
+                    amount,
+                    requesterName,
+                    tickCounter
+            ));
+            AE2Colonies.LOGGER.debug("Queued crafting calculation for {} x{} (by {})", stack, amount, requesterName);
+        }
+    }
+
+    public boolean canSynthesizeDOBlock(@NotNull ItemStack stack, int count) {
+        if (!isTerminalOnline() || !isAllowAutocraft() || stack.isEmpty()) {
+            return false;
+        }
+        if (!DomumOrnamentumHelper.isDOBlock(stack)) {
+            return false;
+        }
+        IGrid grid = getGrid();
+        if (grid == null || level == null) {
+            return false;
+        }
+        if (grid.getActiveMachines(MEArchitectsCutterBlockEntity.class).isEmpty()) {
+            return false;
+        }
+
+        DomumOrnamentumHelper.DOMaterialCost cost = DomumOrnamentumHelper.getMaterialCost(level, stack);
+        if (cost == null) {
+            return false;
+        }
+
+        int batches = (int) Math.ceil((double) count / cost.getYield());
+        for (ItemStack ingredient : cost.getIngredients()) {
+            int needed = batches * ingredient.getCount();
+            int available = AE2IntegrationHelper.getAvailableCount(grid, ingredient, false);
+            if (available < needed) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public boolean synthesizeDOBlock(@NotNull ItemStack stack, int count) {
+        if (!canSynthesizeDOBlock(stack, count)) {
+            return false;
+        }
+        IGrid grid = getGrid();
+        if (grid == null || level == null) {
+            return false;
+        }
+
+        DomumOrnamentumHelper.DOMaterialCost cost = DomumOrnamentumHelper.getMaterialCost(level, stack);
+        if (cost == null) {
+            return false;
+        }
+
+        int batches = (int) Math.ceil((double) count / cost.getYield());
+        List<ItemStack> extractedIngredients = new ArrayList<>();
+        boolean success = true;
+
+        for (ItemStack ingredient : cost.getIngredients()) {
+            int needed = batches * ingredient.getCount();
+            ItemStack toExtract = ingredient.copyWithCount(needed);
+            ItemStack extracted = AE2IntegrationHelper.extractItem(grid, toExtract, getActionSource());
+            if (extracted.getCount() < needed) {
+                success = false;
+                if (!extracted.isEmpty()) {
+                    extractedIngredients.add(extracted);
+                }
+                break;
+            }
+            extractedIngredients.add(extracted);
+        }
+
+        if (!success) {
+            for (ItemStack rollback : extractedIngredients) {
+                AE2IntegrationHelper.insertItem(grid, rollback, getActionSource());
+            }
+            return false;
+        }
+
+        grid.getEnergyService().extractAEPower(
+                20.0 * count,
+                Actionable.MODULATE,
+                PowerMultiplier.CONFIG
+        );
+
+        ItemStack synthesized = DomumOrnamentumHelper.synthesizeDOBlock(stack, count);
+        AE2IntegrationHelper.insertItem(grid, synthesized, getActionSource());
+        AE2Colonies.LOGGER.info("Synthesized DO Block {} x{} into AE2 storage", stack, count);
+        return true;
+    }
+
     // --- NBT Serialization ---
 
     @Override
@@ -245,7 +460,11 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
         if (tag.contains("WhX")) {
             linkedWarehousePos = new BlockPos(tag.getInt("WhX"), tag.getInt("WhY"), tag.getInt("WhZ"));
         }
-        craftingTracker.readFromNBT(tag, provider, this);
+        try {
+            craftingTracker.readFromNBT(tag, provider, this);
+        } catch (Exception e) {
+            AE2Colonies.LOGGER.warn("Failed to load crafting tracker data for Colony Terminal at {}", worldPosition, e);
+        }
     }
 
     // --- MenuProvider ---

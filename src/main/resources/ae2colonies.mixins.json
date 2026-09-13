@@ -5,7 +5,9 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "TileEntityWareHouseMixin",
-    "EntityAIWorkDeliverymanMixin"
+    "EntityAIWorkDeliverymanMixin",
+    "InventoryUtilsMixin",
+    "AbstractWarehouseRequestResolverMixin"
   ],
   "client": [],
   "injectors": {

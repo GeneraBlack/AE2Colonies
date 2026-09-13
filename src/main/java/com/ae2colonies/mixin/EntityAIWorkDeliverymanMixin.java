@@ -50,7 +50,14 @@ public abstract class EntityAIWorkDeliverymanMixin extends AbstractAISkeleton<Jo
                     if (remainder.getCount() < extracted.getCount()) {
                         this.worker.swing(InteractionHand.MAIN_HAND);
                         cir.setReturnValue(true);
+                        return;
                     }
+                }
+
+                // If item is currently being crafted in AE2, wait at the terminal
+                if (terminal.isAllowAutocraft() && terminal.isCrafting(is)) {
+                    this.worker.swing(InteractionHand.MAIN_HAND);
+                    cir.setReturnValue(true);
                 }
             }
         }

@@ -32,6 +32,16 @@ public class AE2Colonies {
             );
         });
 
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(net.neoforged.neoforge.event.server.ServerStoppingEvent.class, event -> {
+            com.ae2colonies.colony.WarehouseMEBridge.clearCaches();
+        });
+
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(net.neoforged.neoforge.event.level.LevelEvent.Unload.class, event -> {
+            if (event.getLevel() instanceof net.minecraft.world.level.Level level) {
+                com.ae2colonies.colony.WarehouseMEBridge.onLevelUnload(level);
+            }
+        });
+
         LOGGER.info("AE2Colonies registries registered.");
     }
 }

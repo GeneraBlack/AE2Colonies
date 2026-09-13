@@ -89,7 +89,6 @@ public class WarehouseMEBridge {
             if (!list.contains(terminal)) {
                 list.add(terminal);
             }
-            warehouse.addContainerPosition(pos);
         }
     }
 
@@ -108,15 +107,17 @@ public class WarehouseMEBridge {
                     WAREHOUSE_TERMINALS.remove(whPos);
                 }
             }
-
-            IColony colony = IColonyManager.getInstance().getColonyByWorld(terminal.getLinkedColonyId(), level);
-            if (colony != null) {
-                IBuilding building = colony.getServerBuildingManager().getBuilding(whPos);
-                if (building instanceof IWareHouse warehouse) {
-                    warehouse.removeContainerPosition(terminal.getBlockPos());
-                }
-            }
         }
+    }
+
+    public static void clearCaches() {
+        WAREHOUSE_TERMINALS.clear();
+        AE2Colonies.LOGGER.debug("Cleared WarehouseMEBridge terminal caches");
+    }
+
+    public static void onLevelUnload(@NotNull Level level) {
+        WAREHOUSE_TERMINALS.values().forEach(list -> list.removeIf(t -> t.getLevel() == level || t.isRemoved()));
+        WAREHOUSE_TERMINALS.entrySet().removeIf(entry -> entry.getValue().isEmpty());
     }
 
     @NotNull
@@ -125,7 +126,8 @@ public class WarehouseMEBridge {
         if (terminals == null || terminals.isEmpty()) {
             return Collections.emptyList();
         }
-        terminals.removeIf(t -> t.isRemoved() || t.getLevel() == null);
+        Level whLevel = warehouse.getColony() != null ? warehouse.getColony().getWorld() : null;
+        terminals.removeIf(t -> t.isRemoved() || t.getLevel() == null || (whLevel != null && t.getLevel() != whLevel));
         return Collections.unmodifiableList(terminals);
     }
 
