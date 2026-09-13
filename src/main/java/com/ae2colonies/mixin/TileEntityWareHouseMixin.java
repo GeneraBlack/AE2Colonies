@@ -116,7 +116,7 @@ public abstract class TileEntityWareHouseMixin {
 
                 if (terminal.isAllowAutocraft()) {
                     com.minecolonies.api.colony.requestsystem.request.IRequest<? extends com.minecolonies.api.colony.requestsystem.requestable.IDeliverable> activeReq =
-                            AbstractWarehouseRequestResolverMixin.getCurrentRequest();
+                            com.ae2colonies.colony.WarehouseRequestContext.getCurrentRequest();
                     if (activeReq != null) {
                         com.minecolonies.api.colony.requestsystem.requestable.IDeliverable deliverable = activeReq.getRequest();
                         int count = deliverable.getCount();

@@ -1,11 +1,11 @@
 package com.ae2colonies.mixin;
 
+import com.ae2colonies.colony.WarehouseRequestContext;
 import com.minecolonies.api.colony.requestsystem.manager.IRequestManager;
 import com.minecolonies.api.colony.requestsystem.request.IRequest;
 import com.minecolonies.api.colony.requestsystem.requestable.IDeliverable;
 import com.minecolonies.api.colony.requestsystem.token.IToken;
 import com.minecolonies.core.colony.requestsystem.resolvers.core.AbstractWarehouseRequestResolver;
-import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -16,13 +16,6 @@ import java.util.List;
 @Mixin(value = AbstractWarehouseRequestResolver.class, remap = false)
 public abstract class AbstractWarehouseRequestResolverMixin {
 
-    private static final ThreadLocal<IRequest<? extends IDeliverable>> CURRENT_REQUEST = new ThreadLocal<>();
-
-    @Nullable
-    public static IRequest<? extends IDeliverable> getCurrentRequest() {
-        return CURRENT_REQUEST.get();
-    }
-
     @Inject(
             method = "attemptResolveRequest",
             at = @At("HEAD")
@@ -32,7 +25,7 @@ public abstract class AbstractWarehouseRequestResolverMixin {
             IRequest<? extends IDeliverable> request,
             CallbackInfoReturnable<List<IToken<?>>> cir
     ) {
-        CURRENT_REQUEST.set(request);
+        WarehouseRequestContext.setCurrentRequest(request);
     }
 
     @Inject(
@@ -44,7 +37,7 @@ public abstract class AbstractWarehouseRequestResolverMixin {
             IRequest<? extends IDeliverable> request,
             CallbackInfoReturnable<List<IToken<?>>> cir
     ) {
-        CURRENT_REQUEST.remove();
+        WarehouseRequestContext.clear();
     }
 
     @Inject(
@@ -56,7 +49,7 @@ public abstract class AbstractWarehouseRequestResolverMixin {
             IRequest<? extends IDeliverable> completedRequest,
             CallbackInfoReturnable<List<IRequest<?>>> cir
     ) {
-        CURRENT_REQUEST.set(completedRequest);
+        WarehouseRequestContext.setCurrentRequest(completedRequest);
     }
 
     @Inject(
@@ -68,6 +61,6 @@ public abstract class AbstractWarehouseRequestResolverMixin {
             IRequest<? extends IDeliverable> completedRequest,
             CallbackInfoReturnable<List<IRequest<?>>> cir
     ) {
-        CURRENT_REQUEST.remove();
+        WarehouseRequestContext.clear();
     }
 }
