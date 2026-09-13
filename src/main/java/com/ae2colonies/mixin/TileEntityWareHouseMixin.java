@@ -114,7 +114,8 @@ public abstract class TileEntityWareHouseMixin {
                     }
                 }
 
-                if (terminal.isAllowAutocraft()) {
+                if (terminal.isAllowAutocraft() && terminal.getGrid() != null) {
+                    boolean hasCpus = !terminal.getGrid().getCraftingService().getCpus().isEmpty();
                     com.minecolonies.api.colony.requestsystem.request.IRequest<? extends com.minecolonies.api.colony.requestsystem.requestable.IDeliverable> activeReq =
                             com.ae2colonies.colony.WarehouseRequestContext.getCurrentRequest();
 
@@ -136,7 +137,7 @@ public abstract class TileEntityWareHouseMixin {
                                         list.add(new Tuple<>(synthesized, terminal.getBlockPos()));
                                         break;
                                     }
-                                } else if (AE2IntegrationHelper.isCraftable(terminal.getGrid(), requestedStack)) {
+                                } else if (hasCpus && !terminal.isCraftingFailedRecently(requestedStack) && AE2IntegrationHelper.isCraftable(terminal.getGrid(), requestedStack)) {
                                     String requesterName = "Colony Request";
                                     terminal.queueCraftingRequest(requestedStack, count, requesterName);
                                     ItemStack craftStack = requestedStack.copyWithCount(count);
@@ -144,13 +145,13 @@ public abstract class TileEntityWareHouseMixin {
                                     break;
                                 }
                             }
-                        } else if (terminal.getGrid() != null) {
+                        } else if (hasCpus) {
                             // Non-concrete deliverable (Tool, Food, etc.): iterate AE2 craftables
                             // and match using the request predicate (which calls deliverable.matches())
                             for (appeng.api.stacks.AEKey key : terminal.getGrid().getCraftingService().getCraftables(k -> k instanceof appeng.api.stacks.AEItemKey)) {
                                 if (key instanceof appeng.api.stacks.AEItemKey itemKey) {
                                     ItemStack candidate = itemKey.toStack(count);
-                                    if (itemStackSelectionPredicate.test(candidate)) {
+                                    if (!terminal.isCraftingFailedRecently(candidate) && itemStackSelectionPredicate.test(candidate)) {
                                         terminal.queueCraftingRequest(candidate, count, "Colony Request");
                                         list.add(new Tuple<>(candidate, terminal.getBlockPos()));
                                         break;
@@ -158,12 +159,12 @@ public abstract class TileEntityWareHouseMixin {
                                 }
                             }
                         }
-                    } else if (terminal.getGrid() != null) {
+                    } else if (hasCpus) {
                         // No active request context — fallback: iterate craftables and match
                         for (appeng.api.stacks.AEKey key : terminal.getGrid().getCraftingService().getCraftables(k -> k instanceof appeng.api.stacks.AEItemKey)) {
                             if (key instanceof appeng.api.stacks.AEItemKey itemKey) {
                                 ItemStack candidate = itemKey.toStack(64);
-                                if (itemStackSelectionPredicate.test(candidate)) {
+                                if (!terminal.isCraftingFailedRecently(candidate) && itemStackSelectionPredicate.test(candidate)) {
                                     terminal.queueCraftingRequest(candidate, 64, "Colony Request");
                                     list.add(new Tuple<>(candidate, terminal.getBlockPos()));
                                     break;
