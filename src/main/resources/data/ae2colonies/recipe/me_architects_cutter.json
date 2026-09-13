@@ -1,0 +1,27 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "IFI",
+    "ACA",
+    "IFI"
+  ],
+  "key": {
+    "I": {
+      "item": "minecraft:iron_ingot"
+    },
+    "F": {
+      "item": "ae2:fluix_crystal"
+    },
+    "A": {
+      "item": "ae2:formation_core"
+    },
+    "C": {
+      "item": "domum_ornamentum:architectscutter"
+    }
+  },
+  "result": {
+    "count": 1,
+    "id": "ae2colonies:me_architects_cutter"
+  }
+}

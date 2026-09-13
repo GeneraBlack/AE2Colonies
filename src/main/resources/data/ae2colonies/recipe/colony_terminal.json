@@ -1,0 +1,27 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "IFI",
+    "RTR",
+    "IFI"
+  ],
+  "key": {
+    "I": {
+      "item": "minecraft:iron_ingot"
+    },
+    "F": {
+      "item": "ae2:fluix_crystal"
+    },
+    "R": {
+      "item": "minecolonies:blockminecoloniesrack"
+    },
+    "T": {
+      "item": "ae2:terminal"
+    }
+  },
+  "result": {
+    "count": 1,
+    "id": "ae2colonies:colony_terminal"
+  }
+}

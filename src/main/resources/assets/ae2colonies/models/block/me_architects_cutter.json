@@ -1,0 +1,9 @@
+{
+  "parent": "minecraft:block/orientable",
+  "textures": {
+    "top": "ae2colonies:block/me_architects_cutter_top",
+    "bottom": "ae2colonies:block/me_architects_cutter_bottom",
+    "front": "ae2colonies:block/me_architects_cutter_front",
+    "side": "ae2colonies:block/me_architects_cutter_side"
+  }
+}

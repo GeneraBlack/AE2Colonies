@@ -1,0 +1,13 @@
+{
+  "itemGroup.ae2colonies": "AE2 Colonies",
+  "block.ae2colonies.colony_terminal": "ME Colony Terminal",
+  "gui.ae2colonies.toggle_deposit": "Deposit into AE2: %s",
+  "gui.ae2colonies.toggle_withdraw": "Withdraw from AE2: %s",
+  "gui.ae2colonies.toggle_autocraft": "Autocraft Requests: %s",
+  "gui.ae2colonies.enabled": "ENABLED",
+  "gui.ae2colonies.disabled": "DISABLED",
+  "gui.ae2colonies.status_online": "Status: ONLINE (Connected)",
+  "gui.ae2colonies.status_offline": "Status: OFFLINE (No Power or Missing Channel)",
+  "gui.ae2colonies.no_warehouse": "Warning: Not inside a MineColonies warehouse!",
+  "block.ae2colonies.me_architects_cutter": "ME Architect's Cutter"
+}

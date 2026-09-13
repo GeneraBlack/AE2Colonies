@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "facing=north,online=false": { "model": "ae2colonies:block/colony_terminal" },
+    "facing=east,online=false":  { "model": "ae2colonies:block/colony_terminal", "y": 90 },
+    "facing=south,online=false": { "model": "ae2colonies:block/colony_terminal", "y": 180 },
+    "facing=west,online=false":  { "model": "ae2colonies:block/colony_terminal", "y": 270 },
+    "facing=north,online=true":  { "model": "ae2colonies:block/colony_terminal_online" },
+    "facing=east,online=true":   { "model": "ae2colonies:block/colony_terminal_online", "y": 90 },
+    "facing=south,online=true":  { "model": "ae2colonies:block/colony_terminal_online", "y": 180 },
+    "facing=west,online=true":   { "model": "ae2colonies:block/colony_terminal_online", "y": 270 }
+  }
+}
