@@ -67,7 +67,7 @@ public abstract class InventoryUtilsMixin {
                     }
                 }
 
-                if (terminal.isAllowAutocraft()) {
+                if (terminal.isAllowAutocraft() && !terminal.isCraftingFailedRecently(is)) {
                     int needed = count - total;
                     if (needed > 0) {
                         if (AE2IntegrationHelper.isCraftable(terminal.getGrid(), is)
@@ -138,6 +138,9 @@ public abstract class InventoryUtilsMixin {
                             if (key instanceof appeng.api.stacks.AEItemKey itemKey) {
                                 ItemStack candidate = itemKey.toStack(needed);
                                 if (stackPredicate.test(candidate)) {
+                                    if (terminal.isCraftingFailedRecently(candidate)) {
+                                        continue;
+                                    }
                                     total += needed;
                                     AE2Colonies.LOGGER.info("InventoryUtilsMixin(Predicate): AE2 can craft {} (total now {})", candidate, total);
                                     cir.setReturnValue(total);

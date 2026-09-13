@@ -82,6 +82,21 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
     private final ColonyCraftingTracker craftingTracker = new ColonyCraftingTracker();
     private final List<PendingCalculation> pendingCalculations = new CopyOnWriteArrayList<>();
     private final IActionSource actionSource = IActionSource.ofMachine(this);
+    
+    private final java.util.Map<java.util.function.Predicate<ItemStack>, Long> failedCrafts = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public void markCraftingFailed(ItemStack stack) {
+        failedCrafts.put(s -> ItemStack.isSameItemSameComponents(s, stack), System.currentTimeMillis());
+    }
+
+    public boolean isCraftingFailedRecently(ItemStack stack) {
+        long now = System.currentTimeMillis();
+        failedCrafts.entrySet().removeIf(e -> now - e.getValue() > 30000); // 30 second cooldown
+        for (java.util.function.Predicate<ItemStack> p : failedCrafts.keySet()) {
+            if (p.test(stack)) return true;
+        }
+        return false;
+    }
 
     public ColonyTerminalBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.COLONY_TERMINAL.get(), pos, state);
@@ -161,6 +176,7 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
                                     );
                                     setChanged();
                                 } else {
+                                    markCraftingFailed(pending.getStack());
                                     AE2Colonies.LOGGER.warn("submitJob failed for {} (errorCode: {}, active CPUs on grid: {})", 
                                             pending.getStack(), result != null ? result.errorCode() : "null", cpuCount);
                                     if (result != null && result.errorCode() == appeng.api.networking.crafting.CraftingSubmitErrorCode.NO_CPU_FOUND) {
