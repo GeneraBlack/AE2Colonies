@@ -106,7 +106,8 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
     protected IManagedGridNode createMainNode() {
         return super.createMainNode()
                 .setIdlePowerUsage(1.5)
-                .setFlags(GridFlags.REQUIRE_CHANNEL);
+                .setFlags(GridFlags.REQUIRE_CHANNEL)
+                .addService(ICraftingRequester.class, this);
     }
 
     private int tickCounter = 0;
