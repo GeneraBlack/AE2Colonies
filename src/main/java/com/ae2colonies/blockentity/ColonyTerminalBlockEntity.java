@@ -233,18 +233,23 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
 
     @Override
     public long insertCraftedItems(ICraftingLink link, AEKey what, long amount, Actionable mode) {
-        if (mode == Actionable.MODULATE) {
-            craftingTracker.onCrafted(link, amount);
-            IGrid grid = getMainNode().getGrid();
-            if (grid != null) {
-                grid.getStorageService().getInventory().insert(what, amount, Actionable.MODULATE, getActionSource());
-            }
+        IGrid grid = getMainNode().getGrid();
+        if (grid == null) {
+            return 0;
         }
-        return amount;
+        
+        long inserted = grid.getStorageService().getInventory().insert(what, amount, mode, getActionSource());
+        
+        if (mode == Actionable.MODULATE && inserted > 0) {
+            craftingTracker.onCrafted(link, inserted);
+        }
+        
+        return inserted;
     }
 
     @Override
     public void jobStateChange(ICraftingLink link) {
+        AE2Colonies.LOGGER.info("jobStateChange called for link: {} (isDone: {}, isCanceled: {})", link.getCraftingID(), link.isDone(), link.isCanceled(), new RuntimeException("Trace for jobStateChange"));
         if (link.isDone()) {
             craftingTracker.onJobComplete(link);
         } else if (link.isCanceled()) {

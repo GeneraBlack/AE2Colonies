@@ -102,16 +102,23 @@ public abstract class TileEntityWareHouseMixin {
         IWareHouse warehouse = getWarehouse();
         if (warehouse != null) {
             List<Tuple<ItemStack, BlockPos>> list = cir.getReturnValue();
-            for (ColonyTerminalBlockEntity terminal : WarehouseMEBridge.getTerminalsForWarehouse(warehouse)) {
-                if (!terminal.isTerminalOnline()) {
-                    continue;
-                }
+            int totalFound = 0;
 
-                if (terminal.isAllowWithdraw()) {
+            // Pass 1: Gather all available items from all terminals
+            for (ColonyTerminalBlockEntity terminal : WarehouseMEBridge.getTerminalsForWarehouse(warehouse)) {
+                if (terminal.isTerminalOnline() && terminal.isAllowWithdraw()) {
                     List<ItemStack> ae2Matches = AE2IntegrationHelper.getMatchingItemStacks(terminal.getGrid(), itemStackSelectionPredicate);
                     for (ItemStack stack : ae2Matches) {
                         list.add(new Tuple<>(stack, terminal.getBlockPos()));
+                        totalFound += stack.getCount();
                     }
+                }
+            }
+
+            // Pass 2: Autocraft if needed
+            for (ColonyTerminalBlockEntity terminal : WarehouseMEBridge.getTerminalsForWarehouse(warehouse)) {
+                if (!terminal.isTerminalOnline()) {
+                    continue;
                 }
 
                 if (terminal.isAllowAutocraft() && terminal.getGrid() != null) {
@@ -122,6 +129,10 @@ public abstract class TileEntityWareHouseMixin {
                     if (activeReq != null) {
                         com.minecolonies.api.colony.requestsystem.requestable.IDeliverable deliverable = activeReq.getRequest();
                         int count = deliverable.getCount();
+
+                        if (totalFound >= count) {
+                            return; // We have enough, no need to craft
+                        }
 
                         if (deliverable instanceof com.minecolonies.api.colony.requestsystem.requestable.IConcreteDeliverable concrete) {
                             // Concrete deliverable: try each specific requested item
@@ -135,6 +146,7 @@ public abstract class TileEntityWareHouseMixin {
                                         terminal.synthesizeDOBlock(requestedStack, count);
                                         ItemStack synthesized = requestedStack.copyWithCount(count);
                                         list.add(new Tuple<>(synthesized, terminal.getBlockPos()));
+                                        totalFound += count;
                                         break;
                                     }
                                 } else if (hasCpus && !terminal.isCraftingFailedRecently(requestedStack) && AE2IntegrationHelper.isCraftable(terminal.getGrid(), requestedStack)) {
@@ -142,6 +154,7 @@ public abstract class TileEntityWareHouseMixin {
                                     terminal.queueCraftingRequest(requestedStack, count, requesterName);
                                     ItemStack craftStack = requestedStack.copyWithCount(count);
                                     list.add(new Tuple<>(craftStack, terminal.getBlockPos()));
+                                    totalFound += count;
                                     break;
                                 }
                             }
@@ -154,6 +167,7 @@ public abstract class TileEntityWareHouseMixin {
                                     if (!terminal.isCraftingFailedRecently(candidate) && itemStackSelectionPredicate.test(candidate)) {
                                         terminal.queueCraftingRequest(candidate, count, "Colony Request");
                                         list.add(new Tuple<>(candidate, terminal.getBlockPos()));
+                                        totalFound += count;
                                         break;
                                     }
                                 }
@@ -161,12 +175,17 @@ public abstract class TileEntityWareHouseMixin {
                         }
                     } else if (hasCpus) {
                         // No active request context — fallback: iterate craftables and match
+                        // But wait! If we don't have a count, we only craft if totalFound is 0 to prevent infinite spam.
+                        if (totalFound > 0) {
+                            return;
+                        }
                         for (appeng.api.stacks.AEKey key : terminal.getGrid().getCraftingService().getCraftables(k -> k instanceof appeng.api.stacks.AEItemKey)) {
                             if (key instanceof appeng.api.stacks.AEItemKey itemKey) {
                                 ItemStack candidate = itemKey.toStack(64);
                                 if (!terminal.isCraftingFailedRecently(candidate) && itemStackSelectionPredicate.test(candidate)) {
                                     terminal.queueCraftingRequest(candidate, 64, "Colony Request");
                                     list.add(new Tuple<>(candidate, terminal.getBlockPos()));
+                                    totalFound += 64;
                                     break;
                                 }
                             }
