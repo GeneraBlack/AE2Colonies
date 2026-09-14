@@ -249,7 +249,7 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
 
     @Override
     public void jobStateChange(ICraftingLink link) {
-        AE2Colonies.LOGGER.info("jobStateChange called for link: {} (isDone: {}, isCanceled: {})", link.getCraftingID(), link.isDone(), link.isCanceled(), new RuntimeException("Trace for jobStateChange"));
+        AE2Colonies.LOGGER.info("jobStateChange called for link: {} (isDone: {}, isCanceled: {})", link.getCraftingID(), link.isDone(), link.isCanceled());
         if (link.isDone()) {
             craftingTracker.onJobComplete(link);
         } else if (link.isCanceled()) {
