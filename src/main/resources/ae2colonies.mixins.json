@@ -2,10 +2,12 @@
   "required": true,
   "minVersion": "0.8",
   "package": "com.ae2colonies.mixin",
+  "plugin": "com.ae2colonies.mixin.AE2ColoniesMixinPlugin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "TileEntityWareHouseMixin",
     "EntityAIWorkDeliverymanMixin",
+    "NewEntityAIWorkDeliverymanMixin",
     "InventoryUtilsMixin",
     "AbstractWarehouseRequestResolverMixin",
     "MinecraftServerMixin"

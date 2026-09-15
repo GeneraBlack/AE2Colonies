@@ -13,6 +13,7 @@ import appeng.blockentity.grid.AENetworkedBlockEntity;
 import com.ae2colonies.block.MEArchitectsCutterBlock;
 import com.ae2colonies.domum.DomumOrnamentumHelper;
 import com.ae2colonies.init.ModBlockEntities;
+import com.ae2colonies.init.ModItems;
 import com.ae2colonies.menu.MEArchitectsCutterMenu;
 import com.ldtteam.domumornamentum.block.IMateriallyTexturedBlock;
 import net.minecraft.core.BlockPos;
@@ -29,6 +30,7 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerData;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
@@ -115,8 +117,14 @@ public class MEArchitectsCutterBlockEntity extends AENetworkedBlockEntity
     @Override
     protected IManagedGridNode createMainNode() {
         return super.createMainNode()
+                .setVisualRepresentation(ModItems.ME_ARCHITECTS_CUTTER.get())
                 .setIdlePowerUsage(2.0)
                 .setFlags(GridFlags.REQUIRE_CHANNEL);
+    }
+
+    @Override
+    protected Item getItemFromBlockEntity() {
+        return ModItems.ME_ARCHITECTS_CUTTER.get();
     }
 
     public ItemStackHandler getInventory() {

@@ -23,10 +23,13 @@ import com.ae2colonies.block.ColonyTerminalBlock;
 import com.ae2colonies.colony.WarehouseMEBridge;
 import com.ae2colonies.domum.DomumOrnamentumHelper;
 import com.ae2colonies.init.ModBlockEntities;
+import com.ae2colonies.init.ModItems;
 import com.ae2colonies.menu.ColonyTerminalMenu;
 import com.google.common.collect.ImmutableSet;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
+import net.neoforged.neoforge.items.IItemHandler;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
@@ -34,6 +37,7 @@ import net.minecraft.world.MenuProvider;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.NotNull;
@@ -105,9 +109,15 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
     @Override
     protected IManagedGridNode createMainNode() {
         return super.createMainNode()
+                .setVisualRepresentation(ModItems.COLONY_TERMINAL.get())
                 .setIdlePowerUsage(1.5)
                 .setFlags(GridFlags.REQUIRE_CHANNEL)
                 .addService(ICraftingRequester.class, this);
+    }
+
+    @Override
+    protected Item getItemFromBlockEntity() {
+        return ModItems.COLONY_TERMINAL.get();
     }
 
     private int tickCounter = 0;
@@ -549,5 +559,142 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
     @Override
     public AbstractContainerMenu createMenu(int containerId, Inventory playerInventory, Player player) {
         return new ColonyTerminalMenu(containerId, playerInventory, this);
+    }
+
+    // --- IItemHandler Capability ---
+
+    private IItemHandler itemHandler;
+
+    public IItemHandler getItemHandler(@Nullable Direction side) {
+        if (itemHandler == null) {
+            itemHandler = new ColonyTerminalItemHandler();
+        }
+        return itemHandler;
+    }
+
+    private class ColonyTerminalItemHandler implements IItemHandler {
+        private List<ItemStack> cachedStacks = java.util.Collections.emptyList();
+        private long lastCacheTick = -1;
+
+        private void refreshCache() {
+            if (level == null) return;
+            long currentTick = level.getGameTime();
+            if (currentTick == lastCacheTick) {
+                return;
+            }
+            lastCacheTick = currentTick;
+
+            if (!isTerminalOnline() || getGrid() == null) {
+                cachedStacks = java.util.Collections.emptyList();
+                return;
+            }
+
+            appeng.api.storage.MEStorage storage = AE2IntegrationHelper.getStorage(getGrid());
+            if (storage == null) {
+                cachedStacks = java.util.Collections.emptyList();
+                return;
+            }
+
+            appeng.api.stacks.KeyCounter counter = new appeng.api.stacks.KeyCounter();
+            storage.getAvailableStacks(counter);
+
+            List<ItemStack> list = new ArrayList<>();
+            for (java.util.Map.Entry<AEKey, Long> entry : counter) {
+                if (entry.getKey() instanceof AEItemKey itemKey && entry.getValue() > 0) {
+                    int count = (int) Math.min(itemKey.getItem().getDefaultMaxStackSize(), entry.getValue());
+                    list.add(itemKey.toStack(count));
+                }
+            }
+            cachedStacks = list;
+        }
+
+        @Override
+        public int getSlots() {
+            refreshCache();
+            return cachedStacks.size() + 1;
+        }
+
+        @Override
+        public ItemStack getStackInSlot(int slot) {
+            refreshCache();
+            if (slot >= 0 && slot < cachedStacks.size()) {
+                return cachedStacks.get(slot);
+            }
+            return ItemStack.EMPTY;
+        }
+
+        @Override
+        public ItemStack insertItem(int slot, ItemStack stack, boolean simulate) {
+            if (stack.isEmpty() || !isTerminalOnline() || !isAllowDeposit() || getGrid() == null) {
+                return stack;
+            }
+            return AE2IntegrationHelper.insertItem(
+                    getGrid(),
+                    stack,
+                    getActionSource(),
+                    simulate ? Actionable.SIMULATE : Actionable.MODULATE
+            );
+        }
+
+        @Override
+        public ItemStack extractItem(int slot, int amount, boolean simulate) {
+            if (amount <= 0 || !isTerminalOnline() || !isAllowWithdraw() || getGrid() == null) {
+                return ItemStack.EMPTY;
+            }
+            refreshCache();
+            if (slot < 0 || slot >= cachedStacks.size()) {
+                return ItemStack.EMPTY;
+            }
+
+            ItemStack target = cachedStacks.get(slot);
+            if (target.isEmpty()) {
+                return ItemStack.EMPTY;
+            }
+
+            ItemStack request = target.copyWithCount(amount);
+
+            // 1. Try extract from AE2 storage
+            ItemStack extracted = AE2IntegrationHelper.extractItem(
+                    getGrid(),
+                    request,
+                    getActionSource(),
+                    simulate ? Actionable.SIMULATE : Actionable.MODULATE
+            );
+
+            if (!extracted.isEmpty()) {
+                return extracted;
+            }
+
+            // 2. Try DO Block synthesis on the fly if craftable
+            if (isAllowAutocraft() && DomumOrnamentumHelper.isDOBlock(request)) {
+                if (canSynthesizeDOBlock(request, amount)) {
+                    if (!simulate) {
+                        synthesizeDOBlock(request, amount);
+                    }
+                    return request.copyWithCount(amount);
+                }
+            }
+
+            // 3. Autocrafting trigger
+            if (isAllowAutocraft() && !isCraftingFailedRecently(request)) {
+                if (AE2IntegrationHelper.isCraftable(getGrid(), request)) {
+                    if (!simulate && !isCrafting(request)) {
+                        queueCraftingRequest(request, amount, "ItemHandler Request");
+                    }
+                }
+            }
+
+            return ItemStack.EMPTY;
+        }
+
+        @Override
+        public int getSlotLimit(int slot) {
+            return 64;
+        }
+
+        @Override
+        public boolean isItemValid(int slot, ItemStack stack) {
+            return isTerminalOnline() && isAllowDeposit();
+        }
     }
 }

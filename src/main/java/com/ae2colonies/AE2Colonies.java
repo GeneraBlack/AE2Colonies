@@ -27,9 +27,38 @@ public class AE2Colonies {
         modEventBus.addListener(net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent.class, event -> {
             event.registerBlockEntity(
                     net.neoforged.neoforge.capabilities.Capabilities.ItemHandler.BLOCK,
+                    ModBlockEntities.COLONY_TERMINAL.get(),
+                    (be, side) -> be.getItemHandler(side)
+            );
+            event.registerBlockEntity(
+                    net.neoforged.neoforge.capabilities.Capabilities.ItemHandler.BLOCK,
                     ModBlockEntities.ME_ARCHITECTS_CUTTER.get(),
                     (be, side) -> be.getItemHandler(side)
             );
+
+            event.registerBlockEntity(
+                    appeng.api.AECapabilities.IN_WORLD_GRID_NODE_HOST,
+                    ModBlockEntities.COLONY_TERMINAL.get(),
+                    (be, context) -> be
+            );
+            event.registerBlockEntity(
+                    appeng.api.AECapabilities.IN_WORLD_GRID_NODE_HOST,
+                    ModBlockEntities.ME_ARCHITECTS_CUTTER.get(),
+                    (be, context) -> be
+            );
+        });
+
+        modEventBus.addListener(net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent.class, event -> {
+            event.enqueueWork(() -> {
+                appeng.blockentity.AEBaseBlockEntity.registerBlockEntityItem(
+                        ModBlockEntities.COLONY_TERMINAL.get(),
+                        ModItems.COLONY_TERMINAL.get()
+                );
+                appeng.blockentity.AEBaseBlockEntity.registerBlockEntityItem(
+                        ModBlockEntities.ME_ARCHITECTS_CUTTER.get(),
+                        ModItems.ME_ARCHITECTS_CUTTER.get()
+                );
+            });
         });
 
         var forgeBus = net.neoforged.neoforge.common.NeoForge.EVENT_BUS;

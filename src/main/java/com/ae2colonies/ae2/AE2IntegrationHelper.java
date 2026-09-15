@@ -136,6 +136,11 @@ public class AE2IntegrationHelper {
 
     @NotNull
     public static ItemStack extractItem(@Nullable IGrid grid, @NotNull ItemStack request, @NotNull IActionSource source) {
+        return extractItem(grid, request, source, Actionable.MODULATE);
+    }
+
+    @NotNull
+    public static ItemStack extractItem(@Nullable IGrid grid, @NotNull ItemStack request, @NotNull IActionSource source, Actionable mode) {
         if (request.isEmpty()) {
             return ItemStack.EMPTY;
         }
@@ -150,7 +155,7 @@ public class AE2IntegrationHelper {
             return ItemStack.EMPTY;
         }
 
-        long extracted = storage.extract(key, request.getCount(), Actionable.MODULATE, source);
+        long extracted = storage.extract(key, request.getCount(), mode, source);
         if (extracted <= 0) {
             return ItemStack.EMPTY;
         }
@@ -162,6 +167,11 @@ public class AE2IntegrationHelper {
 
     @NotNull
     public static ItemStack insertItem(@Nullable IGrid grid, @NotNull ItemStack stack, @NotNull IActionSource source) {
+        return insertItem(grid, stack, source, Actionable.MODULATE);
+    }
+
+    @NotNull
+    public static ItemStack insertItem(@Nullable IGrid grid, @NotNull ItemStack stack, @NotNull IActionSource source, Actionable mode) {
         if (stack.isEmpty()) {
             return stack;
         }
@@ -176,7 +186,7 @@ public class AE2IntegrationHelper {
             return stack;
         }
 
-        long inserted = storage.insert(key, stack.getCount(), Actionable.MODULATE, source);
+        long inserted = storage.insert(key, stack.getCount(), mode, source);
         if (inserted <= 0) {
             return stack;
         }

@@ -1,5 +1,8 @@
 package com.ae2colonies.block;
 
+import appeng.api.orientation.IOrientableBlock;
+import appeng.api.orientation.IOrientationStrategy;
+import appeng.api.orientation.OrientationStrategies;
 import appeng.block.AEBaseEntityBlock;
 import com.ae2colonies.blockentity.ColonyTerminalBlockEntity;
 import com.ae2colonies.colony.WarehouseMEBridge;
@@ -24,7 +27,7 @@ import org.jetbrains.annotations.Nullable;
 import com.ae2colonies.init.ModBlockEntities;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 
-public class ColonyTerminalBlock extends AEBaseEntityBlock<ColonyTerminalBlockEntity> {
+public class ColonyTerminalBlock extends AEBaseEntityBlock<ColonyTerminalBlockEntity> implements IOrientableBlock {
 
     public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
     public static final BooleanProperty ONLINE = BooleanProperty.create("online");
@@ -35,6 +38,11 @@ public class ColonyTerminalBlock extends AEBaseEntityBlock<ColonyTerminalBlockEn
         registerDefaultState(getStateDefinition().any()
                 .setValue(FACING, Direction.NORTH)
                 .setValue(ONLINE, false));
+    }
+
+    @Override
+    public IOrientationStrategy getOrientationStrategy() {
+        return OrientationStrategies.horizontalFacing();
     }
 
     @Override
@@ -50,15 +58,14 @@ public class ColonyTerminalBlock extends AEBaseEntityBlock<ColonyTerminalBlockEn
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
         super.createBlockStateDefinition(builder);
-        builder.add(FACING, ONLINE);
+        builder.add(ONLINE);
     }
 
     @Nullable
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
-        return defaultBlockState()
-                .setValue(FACING, context.getHorizontalDirection().getOpposite())
-                .setValue(ONLINE, false);
+        BlockState state = super.getStateForPlacement(context);
+        return state != null ? state.setValue(ONLINE, false) : defaultBlockState().setValue(ONLINE, false);
     }
 
     @Override
