@@ -48,12 +48,31 @@ public abstract class TileEntityWareHouseMixin {
         if (!cir.getReturnValue()) {
             IWareHouse warehouse = getWarehouse();
             if (warehouse != null) {
+                int totalAvailable = 0;
                 for (ColonyTerminalBlockEntity terminal : WarehouseMEBridge.getTerminalsForWarehouse(warehouse)) {
-                    if (terminal.isTerminalOnline() && terminal.isAllowWithdraw()) {
-                        int available = AE2IntegrationHelper.getAvailableCount(terminal.getGrid(), itemStackSelectionPredicate);
-                        if (available >= count) {
+                    if (terminal.isTerminalOnline()) {
+                        if (terminal.isAllowWithdraw()) {
+                            totalAvailable += AE2IntegrationHelper.getAvailableCount(terminal.getGrid(), itemStackSelectionPredicate);
+                        }
+                        if (totalAvailable >= count) {
                             cir.setReturnValue(true);
                             return;
+                        }
+                        if (terminal.isAllowAutocraft() && terminal.getGrid() != null) {
+                            int needed = count - totalAvailable;
+                            if (needed > 0 && !terminal.getGrid().getCraftingService().getCpus().isEmpty()) {
+                                for (appeng.api.stacks.AEKey key : terminal.getGrid().getCraftingService().getCraftables(k -> k instanceof appeng.api.stacks.AEItemKey)) {
+                                    if (key instanceof appeng.api.stacks.AEItemKey itemKey) {
+                                        ItemStack candidate = itemKey.toStack(needed);
+                                        if (itemStackSelectionPredicate.test(candidate) && !terminal.isCraftingFailedRecently(candidate)) {
+                                            if (terminal.isCrafting(candidate) || AE2IntegrationHelper.canCraft(terminal.getGrid(), candidate, needed)) {
+                                                cir.setReturnValue(true);
+                                                return;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -77,12 +96,27 @@ public abstract class TileEntityWareHouseMixin {
         if (!cir.getReturnValue()) {
             IWareHouse warehouse = getWarehouse();
             if (warehouse != null) {
+                int target = count + leftOver;
+                int totalAvailable = 0;
                 for (ColonyTerminalBlockEntity terminal : WarehouseMEBridge.getTerminalsForWarehouse(warehouse)) {
-                    if (terminal.isTerminalOnline() && terminal.isAllowWithdraw()) {
-                        int available = AE2IntegrationHelper.getAvailableCount(terminal.getGrid(), itemStack, !ignoreNBT);
-                        if (available >= count + leftOver) {
+                    if (terminal.isTerminalOnline()) {
+                        if (terminal.isAllowWithdraw()) {
+                            totalAvailable += AE2IntegrationHelper.getAvailableCount(terminal.getGrid(), itemStack, !ignoreNBT);
+                        }
+                        if (totalAvailable >= target) {
                             cir.setReturnValue(true);
                             return;
+                        }
+                        if (terminal.isAllowAutocraft() && !terminal.isCraftingFailedRecently(itemStack)) {
+                            int needed = target - totalAvailable;
+                            if (needed > 0) {
+                                if (terminal.canSynthesizeDOBlock(itemStack, needed)
+                                        || terminal.isCrafting(itemStack)
+                                        || AE2IntegrationHelper.canCraft(terminal.getGrid(), itemStack, needed)) {
+                                    cir.setReturnValue(true);
+                                    return;
+                                }
+                            }
                         }
                     }
                 }
@@ -100,98 +134,117 @@ public abstract class TileEntityWareHouseMixin {
             CallbackInfoReturnable<List<Tuple<ItemStack, BlockPos>>> cir
     ) {
         IWareHouse warehouse = getWarehouse();
-        if (warehouse != null) {
-            List<Tuple<ItemStack, BlockPos>> list = cir.getReturnValue();
-            int totalFound = 0;
+        if (warehouse == null) {
+            return;
+        }
 
-            // Pass 1: Gather all available items from all terminals
-            for (ColonyTerminalBlockEntity terminal : WarehouseMEBridge.getTerminalsForWarehouse(warehouse)) {
-                if (terminal.isTerminalOnline() && terminal.isAllowWithdraw()) {
-                    List<ItemStack> ae2Matches = AE2IntegrationHelper.getMatchingItemStacks(terminal.getGrid(), itemStackSelectionPredicate);
-                    for (ItemStack stack : ae2Matches) {
-                        list.add(new Tuple<>(stack, terminal.getBlockPos()));
-                        totalFound += stack.getCount();
+        List<Tuple<ItemStack, BlockPos>> list = cir.getReturnValue();
+        int totalFound = 0;
+        if (list != null) {
+            for (Tuple<ItemStack, BlockPos> tuple : list) {
+                if (tuple != null && !tuple.getA().isEmpty()) {
+                    totalFound += tuple.getA().getCount();
+                }
+            }
+        }
+
+        com.minecolonies.api.colony.requestsystem.request.IRequest<? extends com.minecolonies.api.colony.requestsystem.requestable.IDeliverable> activeReq =
+                com.ae2colonies.colony.WarehouseRequestContext.getCurrentRequest();
+        int requestedCount = activeReq != null ? activeReq.getRequest().getCount() : Integer.MAX_VALUE;
+
+        if (totalFound >= requestedCount) {
+            return; // Physical racks already have enough
+        }
+
+        for (ColonyTerminalBlockEntity terminal : WarehouseMEBridge.getTerminalsForWarehouse(warehouse)) {
+            if (!terminal.isTerminalOnline()) {
+                continue;
+            }
+
+            // 1. Gather storage items from this terminal
+            java.util.List<ItemStack> ae2Matches = new java.util.ArrayList<>();
+            int terminalStorageFound = 0;
+            if (terminal.isAllowWithdraw()) {
+                ae2Matches = AE2IntegrationHelper.getMatchingItemStacks(terminal.getGrid(), itemStackSelectionPredicate);
+                for (ItemStack stack : ae2Matches) {
+                    terminalStorageFound += stack.getCount();
+                }
+            }
+
+            int needed = requestedCount - (totalFound + terminalStorageFound);
+
+            // 2. Autocraft if needed and request is active
+            ItemStack craftStack = ItemStack.EMPTY;
+            int craftCount = 0;
+
+            if (needed > 0 && activeReq != null && terminal.isAllowAutocraft() && terminal.getGrid() != null) {
+                boolean hasCpus = !terminal.getGrid().getCraftingService().getCpus().isEmpty();
+                com.minecolonies.api.colony.requestsystem.requestable.IDeliverable deliverable = activeReq.getRequest();
+
+                if (deliverable instanceof com.minecolonies.api.colony.requestsystem.requestable.IConcreteDeliverable concrete) {
+                    for (ItemStack reqStack : concrete.getRequestedItems()) {
+                        if (reqStack.isEmpty() || !itemStackSelectionPredicate.test(reqStack)) {
+                            continue;
+                        }
+                        if (com.ae2colonies.domum.DomumOrnamentumHelper.isDOBlock(reqStack)) {
+                            if (terminal.canSynthesizeDOBlock(reqStack, needed)) {
+                                terminal.synthesizeDOBlock(reqStack, needed);
+                                craftStack = reqStack.copyWithCount(needed);
+                                craftCount = needed;
+                                break;
+                            }
+                        } else if (hasCpus && !terminal.isCraftingFailedRecently(reqStack)) {
+                            if (terminal.isCrafting(reqStack) || AE2IntegrationHelper.canCraft(terminal.getGrid(), reqStack, needed)) {
+                                terminal.queueCraftingRequest(reqStack, needed, "Colony Request");
+                                craftStack = reqStack.copyWithCount(needed);
+                                craftCount = needed;
+                                break;
+                            }
+                        }
+                    }
+                } else if (hasCpus) {
+                    for (appeng.api.stacks.AEKey key : terminal.getGrid().getCraftingService().getCraftables(k -> k instanceof appeng.api.stacks.AEItemKey)) {
+                        if (key instanceof appeng.api.stacks.AEItemKey itemKey) {
+                            ItemStack candidate = itemKey.toStack(needed);
+                            if (!terminal.isCraftingFailedRecently(candidate) && itemStackSelectionPredicate.test(candidate)) {
+                                if (terminal.isCrafting(candidate) || AE2IntegrationHelper.canCraft(terminal.getGrid(), candidate, needed)) {
+                                    terminal.queueCraftingRequest(candidate, needed, "Colony Request");
+                                    craftStack = candidate.copyWithCount(needed);
+                                    craftCount = needed;
+                                    break;
+                                }
+                            }
+                        }
                     }
                 }
             }
 
-            // Pass 2: Autocraft if needed
-            for (ColonyTerminalBlockEntity terminal : WarehouseMEBridge.getTerminalsForWarehouse(warehouse)) {
-                if (!terminal.isTerminalOnline()) {
-                    continue;
-                }
-
-                if (terminal.isAllowAutocraft() && terminal.getGrid() != null) {
-                    boolean hasCpus = !terminal.getGrid().getCraftingService().getCpus().isEmpty();
-                    com.minecolonies.api.colony.requestsystem.request.IRequest<? extends com.minecolonies.api.colony.requestsystem.requestable.IDeliverable> activeReq =
-                            com.ae2colonies.colony.WarehouseRequestContext.getCurrentRequest();
-
-                    if (activeReq != null) {
-                        com.minecolonies.api.colony.requestsystem.requestable.IDeliverable deliverable = activeReq.getRequest();
-                        int count = deliverable.getCount();
-
-                        if (totalFound >= count) {
-                            return; // We have enough, no need to craft
-                        }
-
-                        if (deliverable instanceof com.minecolonies.api.colony.requestsystem.requestable.IConcreteDeliverable concrete) {
-                            // Concrete deliverable: try each specific requested item
-                            for (ItemStack requestedStack : concrete.getRequestedItems()) {
-                                if (requestedStack.isEmpty() || !itemStackSelectionPredicate.test(requestedStack)) {
-                                    continue;
-                                }
-
-                                if (com.ae2colonies.domum.DomumOrnamentumHelper.isDOBlock(requestedStack)) {
-                                    if (terminal.canSynthesizeDOBlock(requestedStack, count)) {
-                                        terminal.synthesizeDOBlock(requestedStack, count);
-                                        ItemStack synthesized = requestedStack.copyWithCount(count);
-                                        list.add(new Tuple<>(synthesized, terminal.getBlockPos()));
-                                        totalFound += count;
-                                        break;
-                                    }
-                                } else if (hasCpus && !terminal.isCraftingFailedRecently(requestedStack) && AE2IntegrationHelper.isCraftable(terminal.getGrid(), requestedStack)) {
-                                    String requesterName = "Colony Request";
-                                    terminal.queueCraftingRequest(requestedStack, count, requesterName);
-                                    ItemStack craftStack = requestedStack.copyWithCount(count);
-                                    list.add(new Tuple<>(craftStack, terminal.getBlockPos()));
-                                    totalFound += count;
-                                    break;
-                                }
-                            }
-                        } else if (hasCpus) {
-                            // Non-concrete deliverable (Tool, Food, etc.): iterate AE2 craftables
-                            // and match using the request predicate (which calls deliverable.matches())
-                            for (appeng.api.stacks.AEKey key : terminal.getGrid().getCraftingService().getCraftables(k -> k instanceof appeng.api.stacks.AEItemKey)) {
-                                if (key instanceof appeng.api.stacks.AEItemKey itemKey) {
-                                    ItemStack candidate = itemKey.toStack(count);
-                                    if (!terminal.isCraftingFailedRecently(candidate) && itemStackSelectionPredicate.test(candidate)) {
-                                        terminal.queueCraftingRequest(candidate, count, "Colony Request");
-                                        list.add(new Tuple<>(candidate, terminal.getBlockPos()));
-                                        totalFound += count;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    } else if (hasCpus) {
-                        // No active request context — fallback: iterate craftables and match
-                        // But wait! If we don't have a count, we only craft if totalFound is 0 to prevent infinite spam.
-                        if (totalFound > 0) {
-                            return;
-                        }
-                        for (appeng.api.stacks.AEKey key : terminal.getGrid().getCraftingService().getCraftables(k -> k instanceof appeng.api.stacks.AEItemKey)) {
-                            if (key instanceof appeng.api.stacks.AEItemKey itemKey) {
-                                ItemStack candidate = itemKey.toStack(64);
-                                if (!terminal.isCraftingFailedRecently(candidate) && itemStackSelectionPredicate.test(candidate)) {
-                                    terminal.queueCraftingRequest(candidate, 64, "Colony Request");
-                                    list.add(new Tuple<>(candidate, terminal.getBlockPos()));
-                                    totalFound += 64;
-                                    break;
-                                }
-                            }
-                        }
+            // 3. Add to list: Combine storage stack and craft stack for this terminal pos if matching!
+            boolean craftCombined = false;
+            for (ItemStack storageStack : ae2Matches) {
+                if (!craftStack.isEmpty() && !craftCombined
+                        && ItemStack.isSameItemSameComponents(storageStack, craftStack)) {
+                    int combinedTotal = storageStack.getCount() + craftCount;
+                    int maxStack = storageStack.getMaxStackSize();
+                    if (combinedTotal <= maxStack) {
+                        list.add(new Tuple<>(storageStack.copyWithCount(combinedTotal), terminal.getBlockPos()));
+                    } else {
+                        list.add(new Tuple<>(storageStack.copyWithCount(maxStack), terminal.getBlockPos()));
+                        list.add(new Tuple<>(storageStack.copyWithCount(combinedTotal - maxStack), terminal.getBlockPos()));
                     }
+                    craftCombined = true;
+                } else {
+                    list.add(new Tuple<>(storageStack, terminal.getBlockPos()));
                 }
+            }
+
+            if (!craftStack.isEmpty() && !craftCombined) {
+                list.add(new Tuple<>(craftStack, terminal.getBlockPos()));
+            }
+
+            totalFound += terminalStorageFound + craftCount;
+            if (totalFound >= requestedCount) {
+                return;
             }
         }
     }

@@ -70,8 +70,9 @@ public abstract class InventoryUtilsMixin {
                 if (terminal.isAllowAutocraft() && !terminal.isCraftingFailedRecently(is)) {
                     int needed = count - total;
                     if (needed > 0) {
-                        if (AE2IntegrationHelper.isCraftable(terminal.getGrid(), is)
-                                || terminal.canSynthesizeDOBlock(is, needed)) {
+                        if (terminal.canSynthesizeDOBlock(is, needed)
+                                || terminal.isCrafting(is)
+                                || AE2IntegrationHelper.canCraft(terminal.getGrid(), is, needed)) {
                             total += needed;
                             AE2Colonies.LOGGER.info("InventoryUtilsMixin(Storage): AE2 can craft {} (total now {})", is, total);
                             cir.setReturnValue(total);
@@ -141,10 +142,12 @@ public abstract class InventoryUtilsMixin {
                                     if (terminal.isCraftingFailedRecently(candidate)) {
                                         continue;
                                     }
-                                    total += needed;
-                                    AE2Colonies.LOGGER.info("InventoryUtilsMixin(Predicate): AE2 can craft {} (total now {})", candidate, total);
-                                    cir.setReturnValue(total);
-                                    return;
+                                    if (terminal.isCrafting(candidate) || AE2IntegrationHelper.canCraft(terminal.getGrid(), candidate, needed)) {
+                                        total += needed;
+                                        AE2Colonies.LOGGER.info("InventoryUtilsMixin(Predicate): AE2 can craft {} (total now {})", candidate, total);
+                                        cir.setReturnValue(total);
+                                        return;
+                                    }
                                 }
                             }
                         }

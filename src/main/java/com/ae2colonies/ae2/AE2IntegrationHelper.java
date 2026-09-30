@@ -18,9 +18,14 @@ import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import appeng.api.crafting.IPatternDetails;
+import appeng.api.stacks.GenericStack;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Future;
 import java.util.function.Predicate;
 
@@ -213,6 +218,141 @@ public class AE2IntegrationHelper {
         }
 
         return craftingService.isCraftable(key);
+    }
+
+    private static final int MAX_CRAFT_DEPTH = 6;
+
+    public static boolean canCraft(@Nullable IGrid grid, @NotNull ItemStack stack, long amountNeeded) {
+        if (grid == null || stack.isEmpty() || amountNeeded <= 0) {
+            return false;
+        }
+
+        if (!isNetworkPowered(grid)) {
+            return false;
+        }
+
+        ICraftingService craftingService = getCraftingService(grid);
+        if (craftingService == null || craftingService.getCpus().isEmpty()) {
+            return false;
+        }
+
+        AEItemKey key = AEItemKey.of(stack);
+        if (key == null) {
+            return false;
+        }
+
+        var patterns = craftingService.getCraftingFor(key);
+        if (patterns.isEmpty()) {
+            return false;
+        }
+
+        MEStorage storage = getStorage(grid);
+        if (storage == null) {
+            return false;
+        }
+
+        Set<AEKey> visited = new HashSet<>();
+        Map<AEKey, Long> simulatedUsage = new HashMap<>();
+
+        for (var pattern : patterns) {
+            Map<AEKey, Long> snapshot = new HashMap<>(simulatedUsage);
+            visited.clear();
+            visited.add(key);
+
+            if (hasCraftingIngredients(grid, storage, craftingService, pattern, amountNeeded, 0, visited, simulatedUsage)) {
+                return true;
+            }
+            simulatedUsage = snapshot;
+        }
+
+        return false;
+    }
+
+    private static boolean hasCraftingIngredients(
+            IGrid grid,
+            MEStorage storage,
+            ICraftingService craftingService,
+            IPatternDetails pattern,
+            long amountNeeded,
+            int depth,
+            Set<AEKey> visited,
+            Map<AEKey, Long> simulatedUsage
+    ) {
+        if (pattern == null || amountNeeded <= 0 || depth > MAX_CRAFT_DEPTH) {
+            return false;
+        }
+
+        GenericStack primaryOutput = pattern.getPrimaryOutput();
+        if (primaryOutput == null || primaryOutput.amount() <= 0) {
+            return false;
+        }
+
+        long outputAmount = primaryOutput.amount();
+        long batches = (amountNeeded + outputAmount - 1) / outputAmount;
+
+        IPatternDetails.IInput[] inputs = pattern.getInputs();
+        if (inputs == null || inputs.length == 0) {
+            return true;
+        }
+
+        for (IPatternDetails.IInput input : inputs) {
+            GenericStack[] possibles = input.getPossibleInputs();
+            if (possibles == null || possibles.length == 0) {
+                continue;
+            }
+            long neededPerBatch = input.getMultiplier();
+            long totalNeeded = neededPerBatch * batches;
+
+            boolean inputSatisfied = false;
+            for (GenericStack possible : possibles) {
+                if (possible == null || possible.what() == null) {
+                    continue;
+                }
+                AEKey inputKey = possible.what();
+
+                long alreadyUsed = simulatedUsage.getOrDefault(inputKey, 0L);
+                long totalInStorage = storage.extract(inputKey, Long.MAX_VALUE, Actionable.SIMULATE, IActionSource.empty());
+                long available = Math.max(0, totalInStorage - alreadyUsed);
+
+                if (available >= totalNeeded) {
+                    simulatedUsage.put(inputKey, alreadyUsed + totalNeeded);
+                    inputSatisfied = true;
+                    break;
+                }
+
+                // If available is less than totalNeeded, check if we can sub-craft the remainder (up to MAX_CRAFT_DEPTH)
+                if (depth < MAX_CRAFT_DEPTH && !visited.contains(inputKey) && craftingService.isCraftable(inputKey)) {
+                    long stillNeeded = totalNeeded - available;
+                    var subPatterns = craftingService.getCraftingFor(inputKey);
+                    if (!subPatterns.isEmpty()) {
+                        visited.add(inputKey);
+                        for (var subPattern : subPatterns) {
+                            Map<AEKey, Long> branchSnapshot = new HashMap<>(simulatedUsage);
+                            if (available > 0) {
+                                branchSnapshot.put(inputKey, alreadyUsed + available);
+                            }
+
+                            if (hasCraftingIngredients(grid, storage, craftingService, subPattern, stillNeeded, depth + 1, visited, branchSnapshot)) {
+                                simulatedUsage.clear();
+                                simulatedUsage.putAll(branchSnapshot);
+                                inputSatisfied = true;
+                                break;
+                            }
+                        }
+                        visited.remove(inputKey);
+                        if (inputSatisfied) {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!inputSatisfied) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public static Future<ICraftingPlan> requestCraftingCalculation(

@@ -386,13 +386,35 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
                 return true;
             }
         }
+        if (queuedCraftingItems.contains(stack.getItem())) {
+            return true;
+        }
         return false;
     }
 
+    public long getCraftedProgress(@NotNull ItemStack stack) {
+        if (stack.isEmpty()) {
+            return 0;
+        }
+        long total = 0;
+        for (ColonyCraftingTracker.CraftingJobInfo job : craftingTracker.getActiveJobs()) {
+            if (ItemStack.isSameItemSameComponents(job.getStack(), stack)
+                    || (job.getStack().getItem() == stack.getItem())) {
+                total += job.getAmountCrafted();
+            }
+        }
+        return total;
+    }
+
+    private final java.util.Set<Item> queuedCraftingItems = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final java.util.concurrent.ConcurrentLinkedQueue<Runnable> mainThreadTasks = new java.util.concurrent.ConcurrentLinkedQueue<>();
 
     public void queueCraftingRequest(@NotNull ItemStack stack, long amount, @NotNull String requesterName) {
-        mainThreadTasks.add(() -> requestCrafting(stack, amount, requesterName));
+        queuedCraftingItems.add(stack.getItem());
+        mainThreadTasks.add(() -> {
+            queuedCraftingItems.remove(stack.getItem());
+            requestCrafting(stack, amount, requesterName);
+        });
     }
 
     public void requestCrafting(@NotNull ItemStack stack, long amount, @NotNull String requesterName) {

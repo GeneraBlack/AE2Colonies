@@ -19,7 +19,8 @@ public class CourierTerminalGatherHelper {
     // Track how long each courier has been waiting at a terminal for crafting
     // Key: worker entity ID, Value: remaining wait ticks
     private static final Map<Integer, Integer> CRAFTING_WAIT_TICKS = new ConcurrentHashMap<>();
-    private static final int MAX_CRAFTING_WAIT = 600; // 30 seconds at 20 tps
+    private static final Map<Integer, Long> LAST_CRAFTED_PROGRESS = new ConcurrentHashMap<>();
+    private static final int MAX_CRAFTING_WAIT = 2400; // 2 minutes at 20 tps
 
     /**
      * Attempts to gather items from a ColonyTerminalBlockEntity into the courier's inventory,
@@ -42,7 +43,7 @@ public class CourierTerminalGatherHelper {
 
         if (entity instanceof ColonyTerminalBlockEntity terminal) {
             if (!terminal.isTerminalOnline() || !terminal.isAllowWithdraw()) {
-                CRAFTING_WAIT_TICKS.remove(worker.getId());
+                clearWaitTicks(worker.getId());
                 return Boolean.FALSE;
             }
 
@@ -60,7 +61,7 @@ public class CourierTerminalGatherHelper {
                 }
                 if (remainder.getCount() < extracted.getCount()) {
                     worker.swing(InteractionHand.MAIN_HAND);
-                    CRAFTING_WAIT_TICKS.remove(worker.getId());
+                    clearWaitTicks(worker.getId());
                     AE2Colonies.LOGGER.debug("Courier {} extracted {} from AE2 terminal", worker.getName().getString(), extracted);
                     return Boolean.TRUE;
                 }
@@ -76,7 +77,7 @@ public class CourierTerminalGatherHelper {
                 }
                 if (remainder.getCount() < doStack.getCount()) {
                     worker.swing(InteractionHand.MAIN_HAND);
-                    CRAFTING_WAIT_TICKS.remove(worker.getId());
+                    clearWaitTicks(worker.getId());
                     AE2Colonies.LOGGER.debug("Courier {} received synthesized DO block {} from terminal", worker.getName().getString(), doStack);
                     return Boolean.TRUE;
                 }
@@ -85,6 +86,15 @@ public class CourierTerminalGatherHelper {
             // 3. AE2 Autocrafting Wait Logic
             if (terminal.isAllowAutocraft() && terminal.isCrafting(is)) {
                 int entityId = worker.getId();
+                long currentProgress = terminal.getCraftedProgress(is);
+                Long lastProgress = LAST_CRAFTED_PROGRESS.get(entityId);
+
+                // If this is a newly tracked wait or progress was made (items finished crafting), reset the wait budget!
+                if (lastProgress == null || currentProgress > lastProgress) {
+                    LAST_CRAFTED_PROGRESS.put(entityId, currentProgress);
+                    CRAFTING_WAIT_TICKS.put(entityId, MAX_CRAFTING_WAIT);
+                }
+
                 int remaining = CRAFTING_WAIT_TICKS.computeIfAbsent(entityId, k -> MAX_CRAFTING_WAIT);
 
                 if (remaining > 0) {
@@ -94,16 +104,16 @@ public class CourierTerminalGatherHelper {
                     worker.swing(InteractionHand.MAIN_HAND);
                     return Boolean.TRUE;
                 } else {
-                    // Timed out waiting for crafting CPU
+                    // Timed out waiting for crafting CPU (2 minutes without progress)
                     AE2Colonies.LOGGER.warn("Courier {} timed out waiting for AE2 crafting of {}",
                             worker.getName().getString(), is);
-                    CRAFTING_WAIT_TICKS.remove(entityId);
+                    clearWaitTicks(entityId);
                     return Boolean.FALSE;
                 }
             }
 
             // Item not available in AE2 and not currently crafting
-            CRAFTING_WAIT_TICKS.remove(worker.getId());
+            clearWaitTicks(worker.getId());
             return Boolean.FALSE;
         }
 
@@ -112,5 +122,6 @@ public class CourierTerminalGatherHelper {
 
     public static void clearWaitTicks(int entityId) {
         CRAFTING_WAIT_TICKS.remove(entityId);
+        LAST_CRAFTED_PROGRESS.remove(entityId);
     }
 }
