@@ -77,14 +77,35 @@ public abstract class TileEntityWareHouseMixin {
                         }
                         if (terminal.isAllowAutocraft() && terminal.getGrid() != null) {
                             int needed = count - totalAvailable;
-                            if (needed > 0 && !terminal.getGrid().getCraftingService().getCpus().isEmpty()) {
-                                for (appeng.api.stacks.AEKey key : terminal.getGrid().getCraftingService().getCraftables(k -> k instanceof appeng.api.stacks.AEItemKey)) {
-                                    if (key instanceof appeng.api.stacks.AEItemKey itemKey) {
-                                        ItemStack candidate = itemKey.toStack(needed);
-                                        if (itemStackSelectionPredicate.test(candidate) && !terminal.isCraftingFailedRecently(candidate)) {
-                                            if (terminal.isCrafting(candidate) || AE2IntegrationHelper.canCraft(terminal.getGrid(), candidate, needed)) {
-                                                cir.setReturnValue(true);
-                                                return;
+                            if (needed > 0) {
+                                // Check DO blocks via request context (predicate doesn't carry the stack)
+                                com.minecolonies.api.colony.requestsystem.request.IRequest<? extends com.minecolonies.api.colony.requestsystem.requestable.IDeliverable> activeReq =
+                                        com.ae2colonies.colony.WarehouseRequestContext.getCurrentRequest();
+                                if (activeReq != null) {
+                                    com.minecolonies.api.colony.requestsystem.requestable.IDeliverable deliverable = activeReq.getRequest();
+                                    if (deliverable instanceof com.minecolonies.api.colony.requestsystem.requestable.IConcreteDeliverable concrete) {
+                                        for (ItemStack reqStack : concrete.getRequestedItems()) {
+                                            if (!reqStack.isEmpty() && itemStackSelectionPredicate.test(reqStack)
+                                                    && com.ae2colonies.domum.DomumOrnamentumHelper.isDOBlock(reqStack)) {
+                                                if (terminal.canSynthesizeDOBlock(reqStack, needed)) {
+                                                    cir.setReturnValue(true);
+                                                    return;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Check AE2 craftables
+                                if (!terminal.getGrid().getCraftingService().getCpus().isEmpty()) {
+                                    for (appeng.api.stacks.AEKey key : terminal.getGrid().getCraftingService().getCraftables(k -> k instanceof appeng.api.stacks.AEItemKey)) {
+                                        if (key instanceof appeng.api.stacks.AEItemKey itemKey) {
+                                            ItemStack candidate = itemKey.toStack(needed);
+                                            if (itemStackSelectionPredicate.test(candidate) && !terminal.isCraftingFailedRecently(candidate)) {
+                                                if (terminal.isCrafting(candidate) || AE2IntegrationHelper.canCraft(terminal.getGrid(), candidate, needed)) {
+                                                    cir.setReturnValue(true);
+                                                    return;
+                                                }
                                             }
                                         }
                                     }
