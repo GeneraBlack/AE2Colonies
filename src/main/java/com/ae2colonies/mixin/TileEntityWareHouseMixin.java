@@ -134,6 +134,7 @@ public abstract class TileEntityWareHouseMixin {
         if (!cir.getReturnValue()) {
             IWareHouse warehouse = getWarehouse();
             if (warehouse != null) {
+                com.ae2colonies.AE2Colonies.LOGGER.info("hasMatchingItemStack(Stack): checking AE2 for {} x{} (ignoreNBT={}, leftOver={})", itemStack, count, ignoreNBT, leftOver);
                 int target = count + leftOver;
                 int totalAvailable = 0;
                 for (ColonyTerminalBlockEntity terminal : WarehouseMEBridge.getTerminalsForWarehouse(warehouse)) {
@@ -145,14 +146,21 @@ public abstract class TileEntityWareHouseMixin {
                             cir.setReturnValue(true);
                             return;
                         }
-                        if (terminal.isAllowAutocraft() && !terminal.isCraftingFailedRecently(itemStack)) {
+                        if (terminal.isAllowAutocraft()) {
                             int needed = target - totalAvailable;
                             if (needed > 0) {
-                                if (terminal.canSynthesizeDOBlock(itemStack, needed)
-                                        || terminal.isCrafting(itemStack)
-                                        || AE2IntegrationHelper.canCraft(terminal.getGrid(), itemStack, needed)) {
+                                // DO block synthesis is independent of AE2 crafting — check first
+                                if (terminal.canSynthesizeDOBlock(itemStack, needed)) {
                                     cir.setReturnValue(true);
                                     return;
+                                }
+                                // AE2 pattern crafting — respect failed-craft cooldown
+                                if (!terminal.isCraftingFailedRecently(itemStack)) {
+                                    if (terminal.isCrafting(itemStack)
+                                            || AE2IntegrationHelper.canCraft(terminal.getGrid(), itemStack, needed)) {
+                                        cir.setReturnValue(true);
+                                        return;
+                                    }
                                 }
                             }
                         }

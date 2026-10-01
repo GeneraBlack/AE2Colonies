@@ -498,21 +498,25 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
 
     public boolean canSynthesizeDOBlock(@NotNull ItemStack stack, int count) {
         if (!isTerminalOnline() || !isAllowAutocraft() || stack.isEmpty()) {
+            AE2Colonies.LOGGER.info("canSynthesizeDOBlock: rejected (online={}, autocraft={}, empty={})", isTerminalOnline(), isAllowAutocraft(), stack.isEmpty());
             return false;
         }
         if (!DomumOrnamentumHelper.isDOBlock(stack)) {
-            return false;
+            return false; // Not a DO block — no logging needed, this is expected for most items
         }
         IGrid grid = getGrid();
         if (grid == null || level == null) {
+            AE2Colonies.LOGGER.info("canSynthesizeDOBlock: rejected for {} (grid={}, level={})", stack, grid != null, level != null);
             return false;
         }
         if (grid.getActiveMachines(MEArchitectsCutterBlockEntity.class).isEmpty()) {
+            AE2Colonies.LOGGER.info("canSynthesizeDOBlock: rejected for {} — no ME Architect's Cutter found in network", stack);
             return false;
         }
 
         DomumOrnamentumHelper.DOMaterialCost cost = DomumOrnamentumHelper.getMaterialCost(level, stack);
         if (cost == null) {
+            AE2Colonies.LOGGER.info("canSynthesizeDOBlock: rejected for {} — getMaterialCost returned null", stack);
             return false;
         }
 
@@ -521,9 +525,11 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
             int needed = batches * ingredient.getCount();
             int available = AE2IntegrationHelper.getAvailableCount(grid, ingredient, false);
             if (available < needed) {
+                AE2Colonies.LOGGER.info("canSynthesizeDOBlock: rejected for {} — missing ingredient {} (need {}, have {})", stack, ingredient, needed, available);
                 return false;
             }
         }
+        AE2Colonies.LOGGER.info("canSynthesizeDOBlock: APPROVED for {} x{}", stack, count);
         return true;
     }
 
