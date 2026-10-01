@@ -320,7 +320,7 @@ public class AE2IntegrationHelper {
         for (IPatternDetails.IInput input : inputs) {
             GenericStack[] possibles = input.getPossibleInputs();
             if (possibles == null || possibles.length == 0) {
-                continue;
+                return false; // Input has no satisfiable alternatives → recipe can't be fulfilled
             }
             long neededPerBatch = input.getMultiplier();
             long totalNeeded = neededPerBatch * batches;

@@ -171,8 +171,19 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
                         try {
                             ICraftingPlan plan = pending.getFuture().get();
                             if (plan != null) {
-                                AE2Colonies.LOGGER.info("Crafting plan completed for {}. Simulation: {}, Missing: {}", pending.getStack(), plan.simulation(), plan.missingItems() != null ? plan.missingItems().size() : 0);
+                                long missingCount = plan.missingItems() != null ? plan.missingItems().size() : 0;
+                                AE2Colonies.LOGGER.info("Crafting plan completed for {}. Simulation: {}, Missing: {}", pending.getStack(), plan.simulation(), missingCount);
                                 
+                                // Don't submit if the plan has missing items — mark as failed so
+                                // MineColonies can fall back to its own workers
+                                if (missingCount > 0) {
+                                    markCraftingFailed(pending.getStack());
+                                    AE2Colonies.LOGGER.warn("Crafting plan for {} has {} missing items — not submitting. " +
+                                            "MineColonies workers should handle this recipe instead.", 
+                                            pending.getStack(), missingCount);
+                                    continue;
+                                }
+
                                 int cpuCount = grid.getCraftingService().getCpus().size();
                                 ICraftingSubmitResult result = AE2IntegrationHelper.submitCraftingJob(
                                         grid,
