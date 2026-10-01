@@ -22,6 +22,20 @@ import java.util.function.Predicate;
 @Mixin(value = TileEntityWareHouse.class, remap = false)
 public abstract class TileEntityWareHouseMixin {
 
+    /**
+     * Splits an ItemStack into multiple Tuples, each with count <= maxStackSize.
+     * Prevents MineColonies serialization crash (ItemStack count must be [1;99]).
+     */
+    private static void addSafeStacks(List<Tuple<ItemStack, BlockPos>> list, ItemStack stack, BlockPos pos) {
+        int remaining = stack.getCount();
+        int maxSize = Math.min(stack.getMaxStackSize(), 64);
+        while (remaining > 0) {
+            int chunk = Math.min(remaining, maxSize);
+            list.add(new Tuple<>(stack.copyWithCount(chunk), pos));
+            remaining -= chunk;
+        }
+    }
+
     private static java.lang.reflect.Method getBuildingMethod;
 
     private IWareHouse getWarehouse() {
@@ -230,21 +244,15 @@ public abstract class TileEntityWareHouseMixin {
                 if (!craftStack.isEmpty() && !craftCombined
                         && ItemStack.isSameItemSameComponents(storageStack, craftStack)) {
                     int combinedTotal = storageStack.getCount() + craftCount;
-                    int maxStack = storageStack.getMaxStackSize();
-                    if (combinedTotal <= maxStack) {
-                        list.add(new Tuple<>(storageStack.copyWithCount(combinedTotal), terminal.getBlockPos()));
-                    } else {
-                        list.add(new Tuple<>(storageStack.copyWithCount(maxStack), terminal.getBlockPos()));
-                        list.add(new Tuple<>(storageStack.copyWithCount(combinedTotal - maxStack), terminal.getBlockPos()));
-                    }
+                    addSafeStacks(list, storageStack.copyWithCount(combinedTotal), terminal.getBlockPos());
                     craftCombined = true;
                 } else {
-                    list.add(new Tuple<>(storageStack, terminal.getBlockPos()));
+                    addSafeStacks(list, storageStack, terminal.getBlockPos());
                 }
             }
 
             if (!craftStack.isEmpty() && !craftCombined) {
-                list.add(new Tuple<>(craftStack, terminal.getBlockPos()));
+                addSafeStacks(list, craftStack, terminal.getBlockPos());
             }
 
             totalFound += terminalStorageFound + craftCount;

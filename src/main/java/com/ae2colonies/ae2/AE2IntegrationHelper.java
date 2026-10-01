@@ -129,10 +129,17 @@ public class AE2IntegrationHelper {
 
         for (Map.Entry<AEKey, Long> entry : counter) {
             if (entry.getKey() instanceof AEItemKey itemKey) {
-                int count = (int) Math.min(itemKey.getItem().getDefaultMaxStackSize(), entry.getValue());
-                ItemStack is = itemKey.toStack(count);
-                if (predicate.test(is)) {
-                    result.add(is);
+                int maxStack = Math.min(itemKey.getItem().getDefaultMaxStackSize(), 64);
+                // Test with a single stack to check predicate
+                ItemStack testStack = itemKey.toStack(1);
+                if (predicate.test(testStack)) {
+                    // Split full available count into safe-sized stacks
+                    long remaining = entry.getValue();
+                    while (remaining > 0) {
+                        int chunk = (int) Math.min(maxStack, remaining);
+                        result.add(itemKey.toStack(chunk));
+                        remaining -= chunk;
+                    }
                 }
             }
         }
