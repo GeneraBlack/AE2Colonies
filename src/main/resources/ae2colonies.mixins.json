@@ -10,7 +10,8 @@
     "NewEntityAIWorkDeliverymanMixin",
     "InventoryUtilsMixin",
     "AbstractWarehouseRequestResolverMixin",
-    "MinecraftServerMixin"
+    "MinecraftServerMixin",
+    "RequestHandlerMixin"
   ],
   "client": [],
   "injectors": {
