@@ -209,6 +209,17 @@ public class ColonyCraftingTracker {
         return Collections.unmodifiableList(list);
     }
 
+    public boolean cancelJob(int index) {
+        List<CraftingJobInfo> active = getActiveJobs();
+        if (index < 0 || index >= active.size()) return false;
+        CraftingJobInfo job = active.get(index);
+        if (job.getLink() != null) {
+            job.getLink().cancel();
+        }
+        job.setCanceled(true);
+        return true;
+    }
+
     public void writeToNBT(CompoundTag tag, HolderLookup.Provider provider) {
         ListTag list = new ListTag();
         for (CraftingJobInfo info : jobsByLinkId.values()) {

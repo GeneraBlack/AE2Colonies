@@ -72,7 +72,7 @@ neoForge {
 dependencies {
     implementation "appeng:appliedenergistics2:${project.ae2_version}"
     implementation "com.ldtteam:minecolonies:${project.minecolonies_version}"
-    implementation "com.ldtteam:domum-ornamentum:1.0.223-snapshot"
+    implementation "com.ldtteam:domum-ornamentum:${project.domum_ornamentum_version}"
     implementation "maven.modrinth:guideme:${project.guideme_version}"
 }
 

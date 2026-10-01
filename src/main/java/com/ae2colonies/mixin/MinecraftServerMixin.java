@@ -12,8 +12,6 @@ import java.util.stream.Stream;
 @Mixin(MinecraftServer.class)
 public abstract class MinecraftServerMixin {
 
-    private int shutdownSpinCount = 0;
-
     /**
      * In NeoForge 1.21.1, stopServer() introduces a while-loop checking whether any level's
      * chunkMap.hasWork() returns true. However, distanceManager.hasTickets() returns true whenever

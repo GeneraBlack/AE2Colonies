@@ -59,7 +59,7 @@ public abstract class InventoryUtilsMixin {
                     int ae2Count = AE2IntegrationHelper.getAvailableCount(terminal.getGrid(), is, matchNBT);
                     if (ae2Count > 0) {
                         total += ae2Count;
-                        AE2Colonies.LOGGER.info("InventoryUtilsMixin(Storage): AE2 has {} of {} (total now {})", ae2Count, is, total);
+                        AE2Colonies.LOGGER.debug("InventoryUtilsMixin(Storage): AE2 has {} of {} (total now {})", ae2Count, is, total);
                     }
                     if (total >= count) {
                         cir.setReturnValue(total);
@@ -74,7 +74,7 @@ public abstract class InventoryUtilsMixin {
                                 || terminal.isCrafting(is)
                                 || AE2IntegrationHelper.canCraft(terminal.getGrid(), is, needed)) {
                             total += needed;
-                            AE2Colonies.LOGGER.info("InventoryUtilsMixin(Storage): AE2 can craft {} (total now {})", is, total);
+                            AE2Colonies.LOGGER.debug("InventoryUtilsMixin(Storage): AE2 can craft {} (total now {})", is, total);
                             cir.setReturnValue(total);
                             return;
                         }
@@ -121,7 +121,7 @@ public abstract class InventoryUtilsMixin {
                     int ae2Count = AE2IntegrationHelper.getAvailableCount(terminal.getGrid(), stackPredicate);
                     if (ae2Count > 0) {
                         total += ae2Count;
-                        AE2Colonies.LOGGER.info("InventoryUtilsMixin(Predicate): AE2 has {} matching items (total now {})", ae2Count, total);
+                        AE2Colonies.LOGGER.debug("InventoryUtilsMixin(Predicate): AE2 has {} matching items (total now {})", ae2Count, total);
                     }
                     if (total >= count) {
                         cir.setReturnValue(total);
@@ -144,7 +144,7 @@ public abstract class InventoryUtilsMixin {
                                     }
                                     if (terminal.isCrafting(candidate) || AE2IntegrationHelper.canCraft(terminal.getGrid(), candidate, needed)) {
                                         total += needed;
-                                        AE2Colonies.LOGGER.info("InventoryUtilsMixin(Predicate): AE2 can craft {} (total now {})", candidate, total);
+                                        AE2Colonies.LOGGER.debug("InventoryUtilsMixin(Predicate): AE2 can craft {} (total now {})", candidate, total);
                                         cir.setReturnValue(total);
                                         return;
                                     }

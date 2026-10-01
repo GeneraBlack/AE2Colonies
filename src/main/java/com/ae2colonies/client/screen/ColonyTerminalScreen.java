@@ -22,6 +22,8 @@ public class ColonyTerminalScreen extends AbstractContainerScreen<ColonyTerminal
     private Button btnDeposit;
     private Button btnWithdraw;
     private Button btnAutocraft;
+    private Button btnPriorityUp;
+    private Button btnPriorityDown;
 
     public ColonyTerminalScreen(ColonyTerminalMenu menu, Inventory playerInventory, Component title) {
         super(menu, playerInventory, title);
@@ -55,6 +57,21 @@ public class ColonyTerminalScreen extends AbstractContainerScreen<ColonyTerminal
             }
         }).bounds(startX, startY + 44, 156, 18).build();
         addRenderableWidget(btnAutocraft);
+
+        // Priority buttons
+        btnPriorityDown = Button.builder(Component.literal("-"), b -> {
+            if (minecraft != null && minecraft.gameMode != null) {
+                minecraft.gameMode.handleInventoryButtonClick(menu.containerId, ColonyTerminalMenu.BUTTON_PRIORITY_DOWN);
+            }
+        }).bounds(startX + 80, startY + 66, 20, 16).build();
+        addRenderableWidget(btnPriorityDown);
+
+        btnPriorityUp = Button.builder(Component.literal("+"), b -> {
+            if (minecraft != null && minecraft.gameMode != null) {
+                minecraft.gameMode.handleInventoryButtonClick(menu.containerId, ColonyTerminalMenu.BUTTON_PRIORITY_UP);
+            }
+        }).bounds(startX + 130, startY + 66, 20, 16).build();
+        addRenderableWidget(btnPriorityUp);
     }
 
     private Component getDepositText() {
@@ -124,6 +141,17 @@ public class ColonyTerminalScreen extends AbstractContainerScreen<ColonyTerminal
         int activeJobsCount = menu.getActiveCraftsCount();
         String craftInfo = "Active Crafts: " + activeJobsCount;
         guiGraphics.drawString(this.font, craftInfo, 8, 118, 0x88CCFF, false);
+
+        // Priority display (between the [-] and [+] buttons)
+        String priorityText = "Priority: " + menu.getPriority();
+        guiGraphics.drawString(this.font, priorityText, 8, 118 - 2, 0xCC88FF, false);
+
+        // Redstone warning
+        if (menu.isRedstoneDisabled()) {
+            guiGraphics.drawString(this.font, 
+                Component.translatable("gui.ae2colonies.redstone_disabled").withColor(0xFF5555),
+                100, 118 - 2, 0xFFFFFF, false);
+        }
 
         guiGraphics.drawString(this.font, this.playerInventoryTitle, 8, 128, 0xAAAAAA, false);
     }

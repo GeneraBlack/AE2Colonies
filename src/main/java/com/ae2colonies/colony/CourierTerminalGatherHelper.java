@@ -70,16 +70,20 @@ public class CourierTerminalGatherHelper {
             // 2. On-demand Domum Ornamentum Synthesis
             if (DomumOrnamentumHelper.isDOBlock(is) && terminal.canSynthesizeDOBlock(is, is.getCount())) {
                 terminal.synthesizeDOBlock(is, is.getCount());
-                ItemStack doStack = is.copyWithCount(is.getCount());
-                ItemStack remainder = ItemHandlerHelper.insertItem(worker.getInventoryCitizen(), doStack, false);
-                if (!remainder.isEmpty()) {
-                    AE2IntegrationHelper.insertItem(terminal.getGrid(), remainder, terminal.getActionSource());
-                }
-                if (remainder.getCount() < doStack.getCount()) {
-                    worker.swing(InteractionHand.MAIN_HAND);
-                    clearWaitTicks(worker.getId());
-                    AE2Colonies.LOGGER.debug("Courier {} received synthesized DO block {} from terminal", worker.getName().getString(), doStack);
-                    return Boolean.TRUE;
+                // Extract the synthesized items from AE2 (they were inserted by synthesizeDOBlock)
+                ItemStack doStack = AE2IntegrationHelper.extractItem(
+                        terminal.getGrid(), is.copyWithCount(is.getCount()), terminal.getActionSource());
+                if (!doStack.isEmpty()) {
+                    ItemStack remainder = ItemHandlerHelper.insertItem(worker.getInventoryCitizen(), doStack, false);
+                    if (!remainder.isEmpty()) {
+                        AE2IntegrationHelper.insertItem(terminal.getGrid(), remainder, terminal.getActionSource());
+                    }
+                    if (remainder.getCount() < doStack.getCount()) {
+                        worker.swing(InteractionHand.MAIN_HAND);
+                        clearWaitTicks(worker.getId());
+                        AE2Colonies.LOGGER.debug("Courier {} received synthesized DO block {} from terminal", worker.getName().getString(), doStack);
+                        return Boolean.TRUE;
+                    }
                 }
             }
 

@@ -78,6 +78,8 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
     private boolean allowDeposit = true;
     private boolean allowWithdraw = true;
     private boolean allowAutocraft = true;
+    private int priority = 0;
+    private boolean redstoneDisabled = false;
 
     private int linkedColonyId = -1;
     @Nullable
@@ -87,19 +89,21 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
     private final List<PendingCalculation> pendingCalculations = new CopyOnWriteArrayList<>();
     private final IActionSource actionSource = IActionSource.ofMachine(this);
     
-    private final java.util.Map<java.util.function.Predicate<ItemStack>, Long> failedCrafts = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.Map<appeng.api.stacks.AEItemKey, Long> failedCrafts = new java.util.concurrent.ConcurrentHashMap<>();
 
     public void markCraftingFailed(ItemStack stack) {
-        failedCrafts.put(s -> ItemStack.isSameItemSameComponents(s, stack), System.currentTimeMillis());
+        appeng.api.stacks.AEItemKey key = appeng.api.stacks.AEItemKey.of(stack);
+        if (key != null) {
+            failedCrafts.put(key, System.currentTimeMillis());
+        }
     }
 
     public boolean isCraftingFailedRecently(ItemStack stack) {
+        appeng.api.stacks.AEItemKey key = appeng.api.stacks.AEItemKey.of(stack);
+        if (key == null) return false;
         long now = System.currentTimeMillis();
-        failedCrafts.entrySet().removeIf(e -> now - e.getValue() > 30000); // 30 second cooldown
-        for (java.util.function.Predicate<ItemStack> p : failedCrafts.keySet()) {
-            if (p.test(stack)) return true;
-        }
-        return false;
+        failedCrafts.entrySet().removeIf(e -> now - e.getValue() > com.ae2colonies.config.AE2ColoniesConfig.CRAFTING_FAILURE_COOLDOWN_MS.get());
+        return failedCrafts.containsKey(key);
     }
 
     public ColonyTerminalBlockEntity(BlockPos pos, BlockState state) {
@@ -151,7 +155,7 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
                 WarehouseMEBridge.registerTerminal(this);
             }
         } else {
-            if (tickCounter % 200 == 0) {
+            if (tickCounter % com.ae2colonies.config.AE2ColoniesConfig.TERMINAL_RECHECK_INTERVAL_TICKS.get() == 0) {
                 WarehouseMEBridge.registerTerminal(this);
             }
         }
@@ -159,9 +163,10 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
         // Process pending crafting calculations asynchronously
         if (!pendingCalculations.isEmpty()) {
             IGrid grid = getGrid();
+            List<PendingCalculation> toRemove = new ArrayList<>();
             for (PendingCalculation pending : pendingCalculations) {
                 if (pending.getFuture().isDone()) {
-                    pendingCalculations.remove(pending);
+                    toRemove.add(pending);
                     if (grid != null) {
                         try {
                             ICraftingPlan plan = pending.getFuture().get();
@@ -201,12 +206,13 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
                             AE2Colonies.LOGGER.error("Failed to complete crafting calculation for {}", pending.getStack(), e);
                         }
                     }
-                } else if (tickCounter - pending.getCreatedTick() > 200) {
+                } else if (tickCounter - pending.getCreatedTick() > com.ae2colonies.config.AE2ColoniesConfig.CRAFTING_TIMEOUT_TICKS.get()) {
                     AE2Colonies.LOGGER.info("Canceling pending calculation for {} after timeout", pending.getStack());
-                    pendingCalculations.remove(pending);
+                    toRemove.add(pending);
                     pending.getFuture().cancel(true);
                 }
             }
+            pendingCalculations.removeAll(toRemove);
         }
     }
 
@@ -324,6 +330,28 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
         setChanged();
     }
 
+    public int getPriority() {
+        return priority;
+    }
+
+    public void setPriority(int priority) {
+        this.priority = Math.max(-10, Math.min(10, priority));
+        setChanged();
+    }
+
+    public boolean isRedstoneDisabled() {
+        return redstoneDisabled;
+    }
+
+    public void setRedstoneDisabled(boolean disabled) {
+        this.redstoneDisabled = disabled;
+    }
+
+    public void cancelCraftingJob(int index) {
+        craftingTracker.cancelJob(index);
+        setChanged();
+    }
+
     public int getLinkedColonyId() {
         return linkedColonyId;
     }
@@ -362,6 +390,9 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
     }
 
     public boolean isTerminalOnline() {
+        if (redstoneDisabled && com.ae2colonies.config.AE2ColoniesConfig.ENABLE_REDSTONE_CONTROL.get()) {
+            return false;
+        }
         return getMainNode().isOnline();
     }
 
@@ -519,16 +550,31 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
 
         if (!success) {
             for (ItemStack rollback : extractedIngredients) {
-                AE2IntegrationHelper.insertItem(grid, rollback, getActionSource());
+                ItemStack remainder = AE2IntegrationHelper.insertItem(grid, rollback, getActionSource());
+                if (!remainder.isEmpty() && level != null) {
+                    net.minecraft.world.entity.item.ItemEntity drop = new net.minecraft.world.entity.item.ItemEntity(
+                            level, worldPosition.getX() + 0.5, worldPosition.getY() + 1, worldPosition.getZ() + 0.5, remainder);
+                    level.addFreshEntity(drop);
+                }
             }
             return false;
         }
 
-        grid.getEnergyService().extractAEPower(
-                20.0 * count,
-                Actionable.MODULATE,
-                PowerMultiplier.CONFIG
-        );
+        double powerNeeded = 20.0 * count;
+        double powerExtracted = grid.getEnergyService().extractAEPower(powerNeeded, Actionable.SIMULATE, PowerMultiplier.CONFIG);
+        if (powerExtracted < powerNeeded) {
+            // Not enough power — rollback ingredients
+            for (ItemStack rollback : extractedIngredients) {
+                ItemStack remainder = AE2IntegrationHelper.insertItem(grid, rollback, getActionSource());
+                if (!remainder.isEmpty() && level != null) {
+                    net.minecraft.world.entity.item.ItemEntity drop = new net.minecraft.world.entity.item.ItemEntity(
+                            level, worldPosition.getX() + 0.5, worldPosition.getY() + 1, worldPosition.getZ() + 0.5, remainder);
+                    level.addFreshEntity(drop);
+                }
+            }
+            return false;
+        }
+        grid.getEnergyService().extractAEPower(powerNeeded, Actionable.MODULATE, PowerMultiplier.CONFIG);
 
         ItemStack synthesized = DomumOrnamentumHelper.synthesizeDOBlock(stack, count);
         AE2IntegrationHelper.insertItem(grid, synthesized, getActionSource());
@@ -544,6 +590,7 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
         tag.putBoolean("AllowDeposit", allowDeposit);
         tag.putBoolean("AllowWithdraw", allowWithdraw);
         tag.putBoolean("AllowAutocraft", allowAutocraft);
+        tag.putInt("Priority", priority);
         tag.putInt("ColonyId", linkedColonyId);
         if (linkedWarehousePos != null) {
             tag.putInt("WhX", linkedWarehousePos.getX());
@@ -559,6 +606,7 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
         if (tag.contains("AllowDeposit")) allowDeposit = tag.getBoolean("AllowDeposit");
         if (tag.contains("AllowWithdraw")) allowWithdraw = tag.getBoolean("AllowWithdraw");
         if (tag.contains("AllowAutocraft")) allowAutocraft = tag.getBoolean("AllowAutocraft");
+        if (tag.contains("Priority")) priority = tag.getInt("Priority");
         if (tag.contains("ColonyId")) linkedColonyId = tag.getInt("ColonyId");
         if (tag.contains("WhX")) {
             linkedWarehousePos = new BlockPos(tag.getInt("WhX"), tag.getInt("WhY"), tag.getInt("WhZ"));
@@ -601,7 +649,7 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
         private void refreshCache() {
             if (level == null) return;
             long currentTick = level.getGameTime();
-            if (currentTick == lastCacheTick) {
+            if (currentTick - lastCacheTick < 20) {
                 return;
             }
             lastCacheTick = currentTick;

@@ -5,8 +5,12 @@ import com.ae2colonies.init.ModBlocks;
 import com.ae2colonies.init.ModCreativeTabs;
 import com.ae2colonies.init.ModItems;
 import com.ae2colonies.init.ModMenuTypes;
+import com.ae2colonies.config.AE2ColoniesConfig;
+import com.ae2colonies.command.AE2ColoniesCommand;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.config.ModConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,8 +19,11 @@ public class AE2Colonies {
     public static final String MOD_ID = "ae2colonies";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-    public AE2Colonies(IEventBus modEventBus) {
+    public AE2Colonies(IEventBus modEventBus, ModContainer modContainer) {
         LOGGER.info("AE2Colonies initializing...");
+
+        // Register config
+        modContainer.registerConfig(ModConfig.Type.COMMON, AE2ColoniesConfig.SPEC);
 
         ModBlocks.register(modEventBus);
         ModBlockEntities.register(modEventBus);
@@ -66,6 +73,11 @@ public class AE2Colonies {
         // Reset state when a new server starts (important for singleplayer world switches)
         forgeBus.addListener(net.neoforged.neoforge.event.server.ServerStartingEvent.class, event -> {
             com.ae2colonies.colony.WarehouseMEBridge.resetForNewServer();
+        });
+
+        // Register commands
+        forgeBus.addListener(net.neoforged.neoforge.event.RegisterCommandsEvent.class, event -> {
+            AE2ColoniesCommand.register(event.getDispatcher());
         });
 
         // Set shutdown flag ASAP when server begins stopping

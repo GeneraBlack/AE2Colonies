@@ -21,6 +21,9 @@ public class ColonyTerminalMenu extends AbstractContainerMenu {
     public static final int BUTTON_TOGGLE_DEPOSIT = 0;
     public static final int BUTTON_TOGGLE_WITHDRAW = 1;
     public static final int BUTTON_TOGGLE_AUTOCRAFT = 2;
+    public static final int BUTTON_PRIORITY_UP = 3;
+    public static final int BUTTON_PRIORITY_DOWN = 4;
+    public static final int BUTTON_CANCEL_CRAFT_BASE = 100;
 
     public static final int DATA_ALLOW_DEPOSIT = 0;
     public static final int DATA_ALLOW_WITHDRAW = 1;
@@ -33,7 +36,9 @@ public class ColonyTerminalMenu extends AbstractContainerMenu {
     public static final int DATA_WH_Z_LOW = 8;
     public static final int DATA_WH_Z_HIGH = 9;
     public static final int DATA_ACTIVE_CRAFTS = 10;
-    public static final int TOTAL_DATA_COUNT = 11;
+    public static final int DATA_PRIORITY = 11;
+    public static final int DATA_REDSTONE_DISABLED = 12;
+    public static final int TOTAL_DATA_COUNT = 13;
 
     @Nullable
     private final ColonyTerminalBlockEntity blockEntity;
@@ -63,6 +68,8 @@ public class ColonyTerminalMenu extends AbstractContainerMenu {
                     case DATA_WH_Z_LOW -> wh != null ? (short) (wh.getZ() & 0xFFFF) : 0;
                     case DATA_WH_Z_HIGH -> wh != null ? (short) ((wh.getZ() >> 16) & 0xFFFF) : 0;
                     case DATA_ACTIVE_CRAFTS -> blockEntity != null ? blockEntity.getCraftingTracker().getActiveJobs().size() : 0;
+                    case DATA_PRIORITY -> blockEntity != null ? blockEntity.getPriority() : 0;
+                    case DATA_REDSTONE_DISABLED -> (blockEntity != null && blockEntity.isRedstoneDisabled()) ? 1 : 0;
                     default -> 0;
                 };
             }
@@ -161,6 +168,14 @@ public class ColonyTerminalMenu extends AbstractContainerMenu {
         return data.get(DATA_ACTIVE_CRAFTS);
     }
 
+    public int getPriority() {
+        return data.get(DATA_PRIORITY);
+    }
+
+    public boolean isRedstoneDisabled() {
+        return data.get(DATA_REDSTONE_DISABLED) != 0;
+    }
+
     @Override
     public boolean clickMenuButton(@NotNull Player player, int id) {
         if (blockEntity != null && !player.level().isClientSide()) {
@@ -168,6 +183,13 @@ public class ColonyTerminalMenu extends AbstractContainerMenu {
                 case BUTTON_TOGGLE_DEPOSIT -> blockEntity.setAllowDeposit(!blockEntity.isAllowDeposit());
                 case BUTTON_TOGGLE_WITHDRAW -> blockEntity.setAllowWithdraw(!blockEntity.isAllowWithdraw());
                 case BUTTON_TOGGLE_AUTOCRAFT -> blockEntity.setAllowAutocraft(!blockEntity.isAllowAutocraft());
+                case BUTTON_PRIORITY_UP -> blockEntity.setPriority(blockEntity.getPriority() + 1);
+                case BUTTON_PRIORITY_DOWN -> blockEntity.setPriority(blockEntity.getPriority() - 1);
+                default -> {
+                    if (id >= BUTTON_CANCEL_CRAFT_BASE) {
+                        blockEntity.cancelCraftingJob(id - BUTTON_CANCEL_CRAFT_BASE);
+                    }
+                }
             }
             return true;
         }

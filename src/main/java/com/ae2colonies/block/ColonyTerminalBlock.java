@@ -100,6 +100,18 @@ public class ColonyTerminalBlock extends AEBaseEntityBlock<ColonyTerminalBlockEn
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof ColonyTerminalBlockEntity terminal) {
                 WarehouseMEBridge.registerTerminal(terminal);
+                terminal.setRedstoneDisabled(level.hasNeighborSignal(pos));
+            }
+        }
+    }
+
+    @Override
+    public void neighborChanged(BlockState state, Level level, BlockPos pos, Block neighborBlock, BlockPos neighborPos, boolean movedByPiston) {
+        super.neighborChanged(state, level, pos, neighborBlock, neighborPos, movedByPiston);
+        if (!level.isClientSide()) {
+            BlockEntity be = level.getBlockEntity(pos);
+            if (be instanceof ColonyTerminalBlockEntity terminal) {
+                terminal.setRedstoneDisabled(level.hasNeighborSignal(pos));
             }
         }
     }

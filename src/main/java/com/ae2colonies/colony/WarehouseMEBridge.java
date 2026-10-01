@@ -22,7 +22,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class WarehouseMEBridge {
 
     private static volatile boolean shuttingDown = false;
-    private static final Map<BlockPos, CopyOnWriteArrayList<ColonyTerminalBlockEntity>> WAREHOUSE_TERMINALS = new ConcurrentHashMap<>();
+    private static final Map<net.minecraft.core.GlobalPos, CopyOnWriteArrayList<ColonyTerminalBlockEntity>> WAREHOUSE_TERMINALS = new ConcurrentHashMap<>();
 
     public static boolean isShuttingDown() {
         return shuttingDown;
@@ -109,13 +109,15 @@ public class WarehouseMEBridge {
 
         if (warehouse != null && !shuttingDown) {
             BlockPos whPos = warehouse.getPosition();
+            net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> dimension = level.dimension();
+            net.minecraft.core.GlobalPos globalWhPos = net.minecraft.core.GlobalPos.of(dimension, whPos);
             boolean wasLinked = whPos.equals(terminal.getLinkedWarehousePos()) && terminal.getLinkedColonyId() == colony.getID();
             if (!wasLinked) {
                 terminal.setLinkedWarehouse(colony.getID(), whPos);
                 AE2Colonies.LOGGER.info("Linked Colony Terminal at {} to Warehouse at {} (Colony #{})", pos, whPos, colony.getID());
             }
 
-            CopyOnWriteArrayList<ColonyTerminalBlockEntity> list = WAREHOUSE_TERMINALS.computeIfAbsent(whPos, k -> new CopyOnWriteArrayList<>());
+            CopyOnWriteArrayList<ColonyTerminalBlockEntity> list = WAREHOUSE_TERMINALS.computeIfAbsent(globalWhPos, k -> new CopyOnWriteArrayList<>());
             if (!list.contains(terminal)) {
                 list.addIfAbsent(terminal);
             }
@@ -124,15 +126,19 @@ public class WarehouseMEBridge {
 
     public static void unregisterTerminal(@NotNull ColonyTerminalBlockEntity terminal) {
         BlockPos whPos = terminal.getLinkedWarehousePos();
-        if (whPos != null) {
-            CopyOnWriteArrayList<ColonyTerminalBlockEntity> list = WAREHOUSE_TERMINALS.get(whPos);
+        if (whPos != null && terminal.getLevel() != null) {
+            net.minecraft.core.GlobalPos globalPos = net.minecraft.core.GlobalPos.of(terminal.getLevel().dimension(), whPos);
+            CopyOnWriteArrayList<ColonyTerminalBlockEntity> list = WAREHOUSE_TERMINALS.get(globalPos);
             if (list != null) {
                 list.remove(terminal);
                 if (list.isEmpty()) {
-                    WAREHOUSE_TERMINALS.remove(whPos);
+                    WAREHOUSE_TERMINALS.remove(globalPos);
                 }
             }
         }
+        // Fallback: also try to remove from any list that contains this terminal
+        WAREHOUSE_TERMINALS.values().forEach(l -> l.remove(terminal));
+        WAREHOUSE_TERMINALS.entrySet().removeIf(e -> e.getValue().isEmpty());
     }
 
     public static void beginShutdown() {
@@ -154,7 +160,7 @@ public class WarehouseMEBridge {
 
     public static void onLevelUnload(@NotNull Level level) {
         // Use a snapshot approach to avoid concurrent modification
-        for (Map.Entry<BlockPos, CopyOnWriteArrayList<ColonyTerminalBlockEntity>> entry : WAREHOUSE_TERMINALS.entrySet()) {
+        for (Map.Entry<net.minecraft.core.GlobalPos, CopyOnWriteArrayList<ColonyTerminalBlockEntity>> entry : WAREHOUSE_TERMINALS.entrySet()) {
             entry.getValue().removeIf(t -> t.getLevel() == level || t.isRemoved());
         }
         WAREHOUSE_TERMINALS.entrySet().removeIf(entry -> entry.getValue().isEmpty());
@@ -166,14 +172,17 @@ public class WarehouseMEBridge {
             return Collections.emptyList();
         }
 
-        CopyOnWriteArrayList<ColonyTerminalBlockEntity> terminals = WAREHOUSE_TERMINALS.get(warehouse.getPosition());
+        Level whLevel = warehouse.getColony() != null ? warehouse.getColony().getWorld() : null;
+        net.minecraft.core.GlobalPos globalPos = whLevel != null 
+            ? net.minecraft.core.GlobalPos.of(whLevel.dimension(), warehouse.getPosition())
+            : null;
+        CopyOnWriteArrayList<ColonyTerminalBlockEntity> terminals = globalPos != null ? WAREHOUSE_TERMINALS.get(globalPos) : null;
         if (terminals == null || terminals.isEmpty()) {
             return Collections.emptyList();
         }
 
         // Build a filtered snapshot — CopyOnWriteArrayList is safe to iterate
         List<ColonyTerminalBlockEntity> result = new ArrayList<>();
-        Level whLevel = warehouse.getColony() != null ? warehouse.getColony().getWorld() : null;
         for (ColonyTerminalBlockEntity t : terminals) {
             if (!t.isRemoved() && t.getLevel() != null && (whLevel == null || t.getLevel() == whLevel)) {
                 result.add(t);
@@ -181,7 +190,21 @@ public class WarehouseMEBridge {
         }
         // Lazy cleanup of stale entries
         terminals.removeIf(t -> t.isRemoved() || t.getLevel() == null);
+        result.sort((a, b) -> Integer.compare(b.getPriority(), a.getPriority()));
         return Collections.unmodifiableList(result);
+    }
+
+    @NotNull
+    public static List<ColonyTerminalBlockEntity> getAllTerminals() {
+        List<ColonyTerminalBlockEntity> all = new ArrayList<>();
+        for (CopyOnWriteArrayList<ColonyTerminalBlockEntity> list : WAREHOUSE_TERMINALS.values()) {
+            for (ColonyTerminalBlockEntity t : list) {
+                if (!t.isRemoved() && t.getLevel() != null) {
+                    all.add(t);
+                }
+            }
+        }
+        return all;
     }
 
     @Nullable

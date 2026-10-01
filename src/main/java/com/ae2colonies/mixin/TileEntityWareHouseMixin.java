@@ -16,17 +16,20 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import java.lang.reflect.Method;
 import java.util.List;
 import java.util.function.Predicate;
 
 @Mixin(value = TileEntityWareHouse.class, remap = false)
 public abstract class TileEntityWareHouseMixin {
 
+    private static java.lang.reflect.Method getBuildingMethod;
+
     private IWareHouse getWarehouse() {
         try {
-            Method method = this.getClass().getMethod("getBuilding");
-            Object building = method.invoke(this);
+            if (getBuildingMethod == null) {
+                getBuildingMethod = this.getClass().getMethod("getBuilding");
+            }
+            Object building = getBuildingMethod.invoke(this);
             if (building instanceof IWareHouse warehouse) {
                 return warehouse;
             }
@@ -138,7 +141,8 @@ public abstract class TileEntityWareHouseMixin {
             return;
         }
 
-        List<Tuple<ItemStack, BlockPos>> list = cir.getReturnValue();
+        List<Tuple<ItemStack, BlockPos>> origList = cir.getReturnValue();
+        List<Tuple<ItemStack, BlockPos>> list = (origList == null) ? new java.util.ArrayList<>() : new java.util.ArrayList<>(origList);
         int totalFound = 0;
         if (list != null) {
             for (Tuple<ItemStack, BlockPos> tuple : list) {
@@ -153,6 +157,7 @@ public abstract class TileEntityWareHouseMixin {
         int requestedCount = activeReq != null ? activeReq.getRequest().getCount() : Integer.MAX_VALUE;
 
         if (totalFound >= requestedCount) {
+            cir.setReturnValue(list);
             return; // Physical racks already have enough
         }
 
@@ -244,9 +249,11 @@ public abstract class TileEntityWareHouseMixin {
 
             totalFound += terminalStorageFound + craftCount;
             if (totalFound >= requestedCount) {
+                cir.setReturnValue(list);
                 return;
             }
         }
+        cir.setReturnValue(list);
     }
 
     @Inject(

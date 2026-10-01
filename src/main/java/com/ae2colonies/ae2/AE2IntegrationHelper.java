@@ -220,7 +220,9 @@ public class AE2IntegrationHelper {
         return craftingService.isCraftable(key);
     }
 
-    private static final int MAX_CRAFT_DEPTH = 6;
+    private static int getMaxCraftDepth() {
+        return com.ae2colonies.config.AE2ColoniesConfig.MAX_CRAFT_DEPTH.get();
+    }
 
     public static boolean canCraft(@Nullable IGrid grid, @NotNull ItemStack stack, long amountNeeded) {
         if (grid == null || stack.isEmpty() || amountNeeded <= 0) {
@@ -278,7 +280,7 @@ public class AE2IntegrationHelper {
             Set<AEKey> visited,
             Map<AEKey, Long> simulatedUsage
     ) {
-        if (pattern == null || amountNeeded <= 0 || depth > MAX_CRAFT_DEPTH) {
+        if (pattern == null || amountNeeded <= 0 || depth > getMaxCraftDepth()) {
             return false;
         }
 
@@ -321,7 +323,7 @@ public class AE2IntegrationHelper {
                 }
 
                 // If available is less than totalNeeded, check if we can sub-craft the remainder (up to MAX_CRAFT_DEPTH)
-                if (depth < MAX_CRAFT_DEPTH && !visited.contains(inputKey) && craftingService.isCraftable(inputKey)) {
+                if (depth < getMaxCraftDepth() && !visited.contains(inputKey) && craftingService.isCraftable(inputKey)) {
                     long stillNeeded = totalNeeded - available;
                     var subPatterns = craftingService.getCraftingFor(inputKey);
                     if (!subPatterns.isEmpty()) {

@@ -1,0 +1,19 @@
+{
+  "itemGroup.ae2colonies": "AE2 Colonies",
+  "block.ae2colonies.colony_terminal": "ME Kolonie-Terminal",
+  "block.ae2colonies.me_architects_cutter": "ME Architekten-Schneider",
+  "item.ae2colonies.colony_terminal": "ME Kolonie-Terminal",
+  "item.ae2colonies.me_architects_cutter": "ME Architekten-Schneider",
+  "gui.ae2colonies.toggle_deposit": "Einlagern in AE2: %s",
+  "gui.ae2colonies.toggle_withdraw": "Entnehmen aus AE2: %s",
+  "gui.ae2colonies.toggle_autocraft": "Autom. Crafting: %s",
+  "gui.ae2colonies.enabled": "AKTIVIERT",
+  "gui.ae2colonies.disabled": "DEAKTIVIERT",
+  "gui.ae2colonies.status_online": "Status: ONLINE (Verbunden)",
+  "gui.ae2colonies.status_offline": "Status: OFFLINE (Kein Strom oder fehlender Kanal)",
+  "gui.ae2colonies.no_warehouse": "Warnung: Nicht innerhalb eines MineColonies Lagerhauses!",
+  "gui.ae2colonies.priority": "Priorität: %s",
+  "gui.ae2colonies.redstone_disabled": "Redstone: DEAKTIVIERT",
+  "gui.ae2colonies.cancel_craft": "\u2716",
+  "gui.ae2colonies.crafting_item": "Craftet: %s"
+}
