@@ -245,6 +245,19 @@ public class AE2IntegrationHelper {
             return false;
         }
 
+        // Only claim craftable if at least one CPU is idle — otherwise we'd block
+        // MineColonies workers from handling the request themselves
+        boolean hasIdleCpu = false;
+        for (var cpu : craftingService.getCpus()) {
+            if (!cpu.isBusy()) {
+                hasIdleCpu = true;
+                break;
+            }
+        }
+        if (!hasIdleCpu) {
+            return false;
+        }
+
         AEItemKey key = AEItemKey.of(stack);
         if (key == null) {
             return false;
