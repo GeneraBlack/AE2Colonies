@@ -1,5 +1,7 @@
 package com.ae2colonies.ae2;
 
+import com.ae2colonies.AE2Colonies;
+
 import appeng.api.config.Actionable;
 import appeng.api.networking.IGrid;
 import appeng.api.networking.IGridNode;
@@ -245,19 +247,6 @@ public class AE2IntegrationHelper {
             return false;
         }
 
-        // Only claim craftable if at least one CPU is idle — otherwise we'd block
-        // MineColonies workers from handling the request themselves
-        boolean hasIdleCpu = false;
-        for (var cpu : craftingService.getCpus()) {
-            if (!cpu.isBusy()) {
-                hasIdleCpu = true;
-                break;
-            }
-        }
-        if (!hasIdleCpu) {
-            return false;
-        }
-
         AEItemKey key = AEItemKey.of(stack);
         if (key == null) {
             return false;
@@ -265,6 +254,7 @@ public class AE2IntegrationHelper {
 
         var patterns = craftingService.getCraftingFor(key);
         if (patterns.isEmpty()) {
+            AE2Colonies.LOGGER.info("canCraft: no patterns found for {} (AEItemKey: {})", stack, key);
             return false;
         }
 

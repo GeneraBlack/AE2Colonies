@@ -203,9 +203,18 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
                                     );
                                     setChanged();
                                 } else {
-                                    markCraftingFailed(pending.getStack());
-                                    AE2Colonies.LOGGER.warn("submitJob failed for {} (errorCode: {}, active CPUs on grid: {})", 
-                                            pending.getStack(), result != null ? result.errorCode() : "null", cpuCount);
+                                    // Only mark as permanently failed for actual recipe issues,
+                                    // NOT for temporary CPU unavailability
+                                    boolean isCpuIssue = result != null && (
+                                            result.errorCode() == appeng.api.networking.crafting.CraftingSubmitErrorCode.NO_CPU_FOUND
+                                            || result.errorCode() == appeng.api.networking.crafting.CraftingSubmitErrorCode.NO_SUITABLE_CPU_FOUND
+                                    );
+                                    if (!isCpuIssue) {
+                                        markCraftingFailed(pending.getStack());
+                                    }
+                                    AE2Colonies.LOGGER.warn("submitJob failed for {} (errorCode: {}, active CPUs on grid: {}{})",
+                                            pending.getStack(), result != null ? result.errorCode() : "null", cpuCount,
+                                            isCpuIssue ? " — will retry next cycle" : " — marked as failed");
                                     if (result != null && result.errorCode() == appeng.api.networking.crafting.CraftingSubmitErrorCode.NO_CPU_FOUND) {
                                         AE2Colonies.LOGGER.warn(">>> WARNING: No Crafting CPU found on ME network! Autocrafting requires at least one Crafting CPU (Crafting Storage multiblock) connected to the ME network. <<<");
                                     }
@@ -525,8 +534,13 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
             int needed = batches * ingredient.getCount();
             int available = AE2IntegrationHelper.getAvailableCount(grid, ingredient, false);
             if (available < needed) {
-                AE2Colonies.LOGGER.info("canSynthesizeDOBlock: rejected for {} — missing ingredient {} (need {}, have {})", stack, ingredient, needed, available);
-                return false;
+                // Also check if the missing amount can be crafted by AE2
+                int shortfall = needed - available;
+                if (!AE2IntegrationHelper.isCraftable(grid, ingredient)) {
+                    AE2Colonies.LOGGER.info("canSynthesizeDOBlock: rejected for {} — missing ingredient {} (need {}, have {}, not craftable)", stack, ingredient, needed, available);
+                    return false;
+                }
+                AE2Colonies.LOGGER.debug("canSynthesizeDOBlock: ingredient {} can be crafted (need {}, have {}, will craft {})", ingredient, needed, available, shortfall);
             }
         }
         AE2Colonies.LOGGER.info("canSynthesizeDOBlock: APPROVED for {} x{}", stack, count);
@@ -548,6 +562,27 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
         }
 
         int batches = (int) Math.ceil((double) count / cost.getYield());
+        
+        // First pass: check if we need to queue crafting for any missing ingredients
+        boolean needsCrafting = false;
+        for (ItemStack ingredient : cost.getIngredients()) {
+            int needed = batches * ingredient.getCount();
+            int available = AE2IntegrationHelper.getAvailableCount(grid, ingredient, false);
+            if (available < needed) {
+                int shortfall = needed - available;
+                AE2Colonies.LOGGER.info("synthesizeDOBlock: queuing crafting for ingredient {} x{} (for {} x{})", 
+                        ingredient, shortfall, stack, count);
+                queueCraftingRequest(ingredient.copyWithCount(shortfall), shortfall, "DO Synthesis: " + stack.getHoverName().getString());
+                needsCrafting = true;
+            }
+        }
+        
+        if (needsCrafting) {
+            // Ingredients are being crafted — synthesis will complete in a future cycle
+            return true;
+        }
+        
+        // Second pass: all ingredients available, extract and synthesize
         List<ItemStack> extractedIngredients = new ArrayList<>();
         boolean success = true;
 
