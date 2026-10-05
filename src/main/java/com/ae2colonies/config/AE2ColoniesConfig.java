@@ -18,6 +18,9 @@ public class AE2ColoniesConfig {
     // Features
     public static final ModConfigSpec.BooleanValue ENABLE_REDSTONE_CONTROL;
     public static final ModConfigSpec.BooleanValue ENABLE_DO_BLOCK_SYNTHESIS;
+    public static final ModConfigSpec.BooleanValue ENABLE_SUB_REQUEST_DELEGATION;
+    public static final ModConfigSpec.IntValue SUB_REQUEST_TIMEOUT_TICKS;
+    public static final ModConfigSpec.IntValue MAX_CONCURRENT_DELEGATED_JOBS;
     
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -53,6 +56,15 @@ public class AE2ColoniesConfig {
         ENABLE_DO_BLOCK_SYNTHESIS = builder
             .comment("Allow on-the-fly Domum Ornamentum block synthesis (default: true)")
             .define("enableDOBlockSynthesis", true);
+        ENABLE_SUB_REQUEST_DELEGATION = builder
+            .comment("Allow AE2 to delegate missing crafting ingredients to colony workers (default: true)")
+            .define("enableSubRequestDelegation", true);
+        SUB_REQUEST_TIMEOUT_TICKS = builder
+            .comment("Ticks before an unfulfilled colony sub-request times out (default: 6000 = 5 minutes)")
+            .defineInRange("subRequestTimeoutTicks", 6000, 600, 72000);
+        MAX_CONCURRENT_DELEGATED_JOBS = builder
+            .comment("Maximum concurrent delegated jobs per terminal (default: 4)")
+            .defineInRange("maxConcurrentDelegatedJobs", 4, 1, 16);
         builder.pop();
         
         SPEC = builder.build();

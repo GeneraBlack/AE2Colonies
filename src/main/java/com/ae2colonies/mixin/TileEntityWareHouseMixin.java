@@ -102,7 +102,9 @@ public abstract class TileEntityWareHouseMixin {
                                         if (key instanceof appeng.api.stacks.AEItemKey itemKey) {
                                             ItemStack candidate = itemKey.toStack(needed);
                                             if (itemStackSelectionPredicate.test(candidate) && !terminal.isCraftingFailedRecently(candidate)) {
-                                                if (terminal.isCrafting(candidate) || AE2IntegrationHelper.canCraft(terminal.getGrid(), candidate, needed)) {
+                                                if (terminal.isCrafting(candidate)
+                                                        || AE2IntegrationHelper.canCraft(terminal.getGrid(), candidate, needed)
+                                                        || terminal.getDelegationCoordinator().canDelegate(candidate, needed)) {
                                                     cir.setReturnValue(true);
                                                     return;
                                                 }
@@ -157,7 +159,8 @@ public abstract class TileEntityWareHouseMixin {
                                 // AE2 pattern crafting — respect failed-craft cooldown
                                 if (!terminal.isCraftingFailedRecently(itemStack)) {
                                     if (terminal.isCrafting(itemStack)
-                                            || AE2IntegrationHelper.canCraft(terminal.getGrid(), itemStack, needed)) {
+                                            || AE2IntegrationHelper.canCraft(terminal.getGrid(), itemStack, needed)
+                                            || terminal.getDelegationCoordinator().canDelegate(itemStack, needed)) {
                                         cir.setReturnValue(true);
                                         return;
                                     }
@@ -242,7 +245,9 @@ public abstract class TileEntityWareHouseMixin {
                                 break;
                             }
                         } else if (hasCpus && !terminal.isCraftingFailedRecently(reqStack)) {
-                            if (terminal.isCrafting(reqStack) || AE2IntegrationHelper.canCraft(terminal.getGrid(), reqStack, needed)) {
+                            if (terminal.isCrafting(reqStack)
+                                    || AE2IntegrationHelper.canCraft(terminal.getGrid(), reqStack, needed)
+                                    || terminal.getDelegationCoordinator().canDelegate(reqStack, needed)) {
                                 terminal.queueCraftingRequest(reqStack, needed, "Colony Request");
                                 craftStack = reqStack.copyWithCount(needed);
                                 craftCount = needed;
@@ -255,7 +260,9 @@ public abstract class TileEntityWareHouseMixin {
                         if (key instanceof appeng.api.stacks.AEItemKey itemKey) {
                             ItemStack candidate = itemKey.toStack(needed);
                             if (!terminal.isCraftingFailedRecently(candidate) && itemStackSelectionPredicate.test(candidate)) {
-                                if (terminal.isCrafting(candidate) || AE2IntegrationHelper.canCraft(terminal.getGrid(), candidate, needed)) {
+                                if (terminal.isCrafting(candidate)
+                                        || AE2IntegrationHelper.canCraft(terminal.getGrid(), candidate, needed)
+                                        || terminal.getDelegationCoordinator().canDelegate(candidate, needed)) {
                                     terminal.queueCraftingRequest(candidate, needed, "Colony Request");
                                     craftStack = candidate.copyWithCount(needed);
                                     craftCount = needed;

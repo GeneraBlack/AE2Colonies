@@ -88,6 +88,12 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
     private final ColonyCraftingTracker craftingTracker = new ColonyCraftingTracker();
     private final List<PendingCalculation> pendingCalculations = new CopyOnWriteArrayList<>();
     private final IActionSource actionSource = IActionSource.ofMachine(this);
+    private final com.ae2colonies.subrequest.DelegatedCraftingCoordinator delegationCoordinator =
+            new com.ae2colonies.subrequest.DelegatedCraftingCoordinator(this);
+
+    public com.ae2colonies.subrequest.DelegatedCraftingCoordinator getDelegationCoordinator() {
+        return delegationCoordinator;
+    }
     
     private final java.util.Map<appeng.api.stacks.AEItemKey, Long> failedCrafts = new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -148,6 +154,7 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
         }
 
         tickCounter++;
+        delegationCoordinator.tick(tickCounter);
         // If not yet linked, retry every 40 ticks (2 seconds)
         // If linked, periodically re-verify every 200 ticks (10 seconds)
         if (linkedWarehousePos == null) {
@@ -174,9 +181,19 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
                                 long missingCount = plan.missingItems() != null ? plan.missingItems().size() : 0;
                                 AE2Colonies.LOGGER.info("Crafting plan completed for {}. Simulation: {}, Missing: {}", pending.getStack(), plan.simulation(), missingCount);
                                 
-                                // Don't submit if the plan has missing items — mark as failed so
-                                // MineColonies can fall back to its own workers
                                 if (missingCount > 0) {
+                                    // Check if we can delegate missing ingredients to the colony instead of failing!
+                                    if (delegationCoordinator.canDelegate(pending.getStack(), (int) pending.getAmount())) {
+                                        delegationCoordinator.startDelegation(
+                                                pending.getStack(),
+                                                (int) pending.getAmount(),
+                                                pending.getRequesterName(),
+                                                tickCounter
+                                        );
+                                        continue;
+                                    }
+
+                                    // Otherwise mark as failed so MineColonies can fall back to its own workers
                                     markCraftingFailed(pending.getStack());
                                     AE2Colonies.LOGGER.warn("Crafting plan for {} has {} missing items — not submitting. " +
                                             "MineColonies workers should handle this recipe instead.", 
@@ -243,6 +260,7 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
             pending.getFuture().cancel(true);
         }
         pendingCalculations.clear();
+        delegationCoordinator.cancelAll();
         WarehouseMEBridge.unregisterTerminal(this);
         super.setRemoved();
     }
@@ -438,6 +456,9 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
             }
         }
         if (queuedCraftingItems.contains(stack.getItem())) {
+            return true;
+        }
+        if (delegationCoordinator.isDelegating(stack)) {
             return true;
         }
         return false;
@@ -650,6 +671,7 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
             tag.putInt("WhZ", linkedWarehousePos.getZ());
         }
         craftingTracker.writeToNBT(tag, provider);
+        delegationCoordinator.save(tag, provider);
     }
 
     @Override
@@ -667,6 +689,11 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
             craftingTracker.readFromNBT(tag, provider, this);
         } catch (Exception e) {
             AE2Colonies.LOGGER.warn("Failed to load crafting tracker data for Colony Terminal at {}", worldPosition, e);
+        }
+        try {
+            delegationCoordinator.load(tag, provider);
+        } catch (Exception e) {
+            AE2Colonies.LOGGER.warn("Failed to load delegation coordinator data for Colony Terminal at {}", worldPosition, e);
         }
     }
 

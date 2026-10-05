@@ -217,4 +217,36 @@ public class WarehouseMEBridge {
         }
         return null;
     }
+
+    @Nullable
+    public static IWareHouse getWarehouseForTerminal(@NotNull ColonyTerminalBlockEntity terminal) {
+        if (shuttingDown) {
+            return null;
+        }
+        Level level = terminal.getLevel();
+        BlockPos whPos = terminal.getLinkedWarehousePos();
+        if (level == null || whPos == null) {
+            return null;
+        }
+        try {
+            IColony colony = IColonyManager.getInstance().getIColony(level, terminal.getBlockPos());
+            if (colony == null) {
+                colony = IColonyManager.getInstance().getClosestIColony(level, terminal.getBlockPos());
+            }
+            if (colony == null) {
+                return null;
+            }
+            IRegisteredStructureManager sm = colony.getServerBuildingManager();
+            if (sm == null) {
+                return null;
+            }
+            IBuilding building = sm.getBuilding(whPos);
+            if (building instanceof IWareHouse wh) {
+                return wh;
+            }
+        } catch (Exception e) {
+            AE2Colonies.LOGGER.debug("Error looking up warehouse for terminal at {}: {}", terminal.getBlockPos(), e.getMessage());
+        }
+        return null;
+    }
 }

@@ -23,6 +23,7 @@ import org.jetbrains.annotations.Nullable;
 import appeng.api.crafting.IPatternDetails;
 import appeng.api.stacks.GenericStack;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -278,6 +279,100 @@ public class AE2IntegrationHelper {
         }
 
         return false;
+    }
+
+    @NotNull
+    public static List<ItemStack> findMissingIngredients(@Nullable IGrid grid, @NotNull ItemStack stack, long amountNeeded) {
+        if (grid == null || stack.isEmpty() || amountNeeded <= 0) {
+            return Collections.emptyList();
+        }
+
+        if (!isNetworkPowered(grid)) {
+            return Collections.emptyList();
+        }
+
+        ICraftingService craftingService = getCraftingService(grid);
+        if (craftingService == null || craftingService.getCpus().isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        AEItemKey key = AEItemKey.of(stack);
+        if (key == null) {
+            return Collections.emptyList();
+        }
+
+        var patterns = craftingService.getCraftingFor(key);
+        if (patterns.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        MEStorage storage = getStorage(grid);
+        if (storage == null) {
+            return Collections.emptyList();
+        }
+
+        for (var pattern : patterns) {
+            List<ItemStack> missing = new ArrayList<>();
+            GenericStack primaryOutput = pattern.getPrimaryOutput();
+            if (primaryOutput == null || primaryOutput.amount() <= 0) {
+                continue;
+            }
+
+            long outputAmount = primaryOutput.amount();
+            long batches = (amountNeeded + outputAmount - 1) / outputAmount;
+
+            IPatternDetails.IInput[] inputs = pattern.getInputs();
+            if (inputs == null || inputs.length == 0) {
+                return Collections.emptyList();
+            }
+
+            boolean anyUncraftable = false;
+            for (IPatternDetails.IInput input : inputs) {
+                GenericStack[] possibles = input.getPossibleInputs();
+                if (possibles == null || possibles.length == 0) {
+                    anyUncraftable = true;
+                    break;
+                }
+                long neededPerBatch = input.getMultiplier();
+                long totalNeeded = neededPerBatch * batches;
+
+                boolean satisfied = false;
+                long maxAvailable = 0;
+                AEItemKey bestPossibleKey = null;
+
+                for (GenericStack possible : possibles) {
+                    if (possible == null || possible.what() == null) continue;
+                    if (possible.what() instanceof AEItemKey itemKey) {
+                        bestPossibleKey = itemKey;
+                        long totalInStorage = storage.extract(itemKey, Long.MAX_VALUE, Actionable.SIMULATE, IActionSource.empty());
+                        if (totalInStorage > maxAvailable) {
+                            maxAvailable = totalInStorage;
+                        }
+                        if (totalInStorage >= totalNeeded) {
+                            satisfied = true;
+                            break;
+                        }
+                        if (craftingService.isCraftable(itemKey)) {
+                            satisfied = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!satisfied && bestPossibleKey != null) {
+                    long shortfall = totalNeeded - maxAvailable;
+                    if (shortfall > 0) {
+                        missing.add(bestPossibleKey.toStack((int) Math.min(shortfall, 64)));
+                    }
+                }
+            }
+
+            if (!anyUncraftable && !missing.isEmpty()) {
+                return missing;
+            }
+        }
+
+        return Collections.emptyList();
     }
 
     private static boolean hasCraftingIngredients(
