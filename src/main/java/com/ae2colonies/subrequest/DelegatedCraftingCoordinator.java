@@ -14,6 +14,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
+import appeng.api.stacks.AEItemKey;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -35,14 +36,18 @@ public class DelegatedCraftingCoordinator {
     }
 
     /**
-     * Checks if there is already an active delegated job for this item stack.
+     * Checks if there is already an active delegated job waiting for colony ingredients
+     * for this item stack.
      */
     public boolean isDelegating(@NotNull ItemStack stack) {
         if (stack.isEmpty()) {
             return false;
         }
         for (DelegatedJob job : activeJobs.values()) {
-            if (!job.getState().isTerminal() && ItemStack.isSameItemSameComponents(job.getTargetStack(), stack)) {
+            // Only report as delegating while actively waiting on the colony.
+            // Once in AE2_CRAFTING, AE2's own trackers take over to avoid blocking requestCrafting!
+            if ((job.getState() == DelegatedJobState.WAITING_FOR_COLONY || job.getState() == DelegatedJobState.ANALYZING)
+                    && ItemStack.isSameItemSameComponents(job.getTargetStack(), stack)) {
                 return true;
             }
         }
@@ -58,7 +63,8 @@ public class DelegatedCraftingCoordinator {
             return false;
         }
 
-        if (!terminal.isTerminalOnline() || !terminal.isAllowAutocraft() || targetStack.isEmpty() || amount <= 0) {
+        if (!terminal.isTerminalOnline() || !terminal.isAllowAutocraft() || !terminal.isAllowDeposit()
+                || targetStack.isEmpty() || amount <= 0) {
             return false;
         }
 
@@ -162,10 +168,19 @@ public class DelegatedCraftingCoordinator {
                 case WAITING_FOR_COLONY -> {
                     // Check if all required ingredients have arrived in ME storage
                     if (terminal.getGrid() != null) {
-                        boolean allPresent = true;
+                        // Aggregate required totals per item to handle multiple split stacks correctly
+                        Map<AEItemKey, Long> requiredTotals = new HashMap<>();
                         for (ItemStack ingredient : job.getRequiredIngredients()) {
-                            long inStorage = AE2IntegrationHelper.getAvailableCount(terminal.getGrid(), ingredient, false);
-                            if (inStorage < ingredient.getCount()) {
+                            AEItemKey key = AEItemKey.of(ingredient);
+                            if (key != null) {
+                                requiredTotals.merge(key, (long) ingredient.getCount(), Long::sum);
+                            }
+                        }
+
+                        boolean allPresent = true;
+                        for (Map.Entry<AEItemKey, Long> entry : requiredTotals.entrySet()) {
+                            long inStorage = AE2IntegrationHelper.getAvailableCount(terminal.getGrid(), entry.getKey().toStack(), false);
+                            if (inStorage < entry.getValue()) {
                                 allPresent = false;
                                 break;
                             }
@@ -174,29 +189,32 @@ public class DelegatedCraftingCoordinator {
                         if (allPresent) {
                             AE2Colonies.LOGGER.info("All ingredients arrived in ME storage for DelegatedCraftingJob {}! Triggering AE2 craft for {} x{}",
                                     job.getJobId(), job.getTargetStack(), job.getTargetAmount());
-                            job.setState(DelegatedJobState.INGREDIENTS_ARRIVED, currentTick);
+                            // Set to AE2_CRAFTING before queuing request so isDelegating() returns false
+                            // and does not block requestCrafting()!
+                            job.setState(DelegatedJobState.AE2_CRAFTING, currentTick);
 
-                            // Trigger the actual AE2 autocrafting job now that ingredients are present
+                            // Trigger the actual AE2 autocrafting job now that all ingredients are present
                             terminal.queueCraftingRequest(
                                     job.getTargetStack(),
                                     job.getTargetAmount(),
                                     "Delegated: " + job.getRequesterName()
                             );
-
-                            job.setState(DelegatedJobState.AE2_CRAFTING, currentTick);
                             terminal.setChanged();
                         }
                     }
                 }
                 case AE2_CRAFTING -> {
-                    // Check if AE2 finished the job
-                    if (!terminal.isCrafting(job.getTargetStack())) {
-                        long available = AE2IntegrationHelper.getAvailableCount(terminal.getGrid(), job.getTargetStack(), false);
-                        if (available >= job.getTargetAmount()) {
-                            AE2Colonies.LOGGER.info("DelegatedCraftingJob {} completed successfully! Target item {} is ready in ME storage.",
-                                    job.getJobId(), job.getTargetStack());
-                            job.setState(DelegatedJobState.COMPLETED, currentTick);
-                            terminal.setChanged();
+                    // Grace period of at least 40 ticks (2 seconds) after submitting before checking completion
+                    // to give the async calculation queue time to start tracking
+                    if (currentTick - job.getLastStateChangeTick() > 40) {
+                        if (!terminal.isCrafting(job.getTargetStack())) {
+                            long available = AE2IntegrationHelper.getAvailableCount(terminal.getGrid(), job.getTargetStack(), false);
+                            if (available >= job.getTargetAmount()) {
+                                AE2Colonies.LOGGER.info("DelegatedCraftingJob {} completed successfully! Target item {} is ready in ME storage.",
+                                        job.getJobId(), job.getTargetStack());
+                                job.setState(DelegatedJobState.COMPLETED, currentTick);
+                                terminal.setChanged();
+                            }
                         }
                     }
                 }

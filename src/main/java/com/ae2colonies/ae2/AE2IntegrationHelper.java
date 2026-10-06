@@ -360,9 +360,12 @@ public class AE2IntegrationHelper {
                 }
 
                 if (!satisfied && bestPossibleKey != null) {
-                    long shortfall = totalNeeded - maxAvailable;
-                    if (shortfall > 0) {
-                        missing.add(bestPossibleKey.toStack((int) Math.min(shortfall, 64)));
+                    long remainingShortfall = totalNeeded - maxAvailable;
+                    int maxStack = bestPossibleKey.getItem().getDefaultMaxStackSize();
+                    while (remainingShortfall > 0) {
+                        int chunkSize = (int) Math.min(remainingShortfall, maxStack);
+                        missing.add(bestPossibleKey.toStack(chunkSize));
+                        remainingShortfall -= chunkSize;
                     }
                 }
             }
