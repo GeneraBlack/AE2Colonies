@@ -15,5 +15,8 @@
   "gui.ae2colonies.priority": "Priority: %s",
   "gui.ae2colonies.redstone_disabled": "Redstone: DISABLED",
   "gui.ae2colonies.cancel_craft": "\u2716",
-  "gui.ae2colonies.crafting_item": "Crafting: %s"
+  "gui.ae2colonies.crafting_item": "Crafting: %s",
+  "message.ae2colonies.missing_ingredients": "Crafting for %s failed: Missing ingredients in ME network: %s",
+  "message.ae2colonies.no_cpu": "Crafting for %s failed: No Crafting CPU found on ME network! Autocrafting requires a Crafting CPU multiblock.",
+  "message.ae2colonies.delegation_timeout": "Delegated crafting for %s timed out waiting for colony workers."
 }

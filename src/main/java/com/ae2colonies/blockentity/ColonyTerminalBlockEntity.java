@@ -198,6 +198,22 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
                                     AE2Colonies.LOGGER.warn("Crafting plan for {} has {} missing items — not submitting. " +
                                             "MineColonies workers should handle this recipe instead.", 
                                             pending.getStack(), missingCount);
+
+                                    // Notify players in the colony
+                                    List<String> missingDescriptions = new ArrayList<>();
+                                    if (plan.missingItems() != null) {
+                                        for (var entry : plan.missingItems()) {
+                                            missingDescriptions.add(entry.getLongValue() + "x " + entry.getKey().getDisplayName().getString());
+                                        }
+                                    }
+                                    String missingStr = missingDescriptions.isEmpty() ? "?" : String.join(", ", missingDescriptions);
+                                    com.ae2colonies.colony.ColonyNotificationHelper.sendColonyNotification(
+                                            this,
+                                            pending.getStack().getItem(),
+                                            Component.translatable("message.ae2colonies.missing_ingredients",
+                                                    pending.getStack().getHoverName(),
+                                                    missingStr)
+                                    );
                                     continue;
                                 }
 
@@ -207,7 +223,7 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
                                         plan,
                                         this,
                                         getActionSource()
-                                );
+                                    );
 
                                 if (result != null && result.successful() && result.link() != null) {
                                     AE2Colonies.LOGGER.info("submitJob successful for {}. Tracking job...", pending.getStack());
@@ -234,6 +250,11 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
                                             isCpuIssue ? " — will retry next cycle" : " — marked as failed");
                                     if (result != null && result.errorCode() == appeng.api.networking.crafting.CraftingSubmitErrorCode.NO_CPU_FOUND) {
                                         AE2Colonies.LOGGER.warn(">>> WARNING: No Crafting CPU found on ME network! Autocrafting requires at least one Crafting CPU (Crafting Storage multiblock) connected to the ME network. <<<");
+                                        com.ae2colonies.colony.ColonyNotificationHelper.sendColonyNotification(
+                                                this,
+                                                pending.getStack().getItem(),
+                                                Component.translatable("message.ae2colonies.no_cpu", pending.getStack().getHoverName())
+                                        );
                                     }
                                 }
                             } else {

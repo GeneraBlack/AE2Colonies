@@ -22,6 +22,10 @@ public class AE2ColoniesConfig {
     public static final ModConfigSpec.IntValue SUB_REQUEST_TIMEOUT_TICKS;
     public static final ModConfigSpec.IntValue MAX_CONCURRENT_DELEGATED_JOBS;
     
+    // Notifications
+    public static final ModConfigSpec.BooleanValue ENABLE_PLAYER_NOTIFICATIONS;
+    public static final ModConfigSpec.IntValue NOTIFICATION_COOLDOWN_SECONDS;
+    
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
         
@@ -65,6 +69,15 @@ public class AE2ColoniesConfig {
         MAX_CONCURRENT_DELEGATED_JOBS = builder
             .comment("Maximum concurrent delegated jobs per terminal (default: 4)")
             .defineInRange("maxConcurrentDelegatedJobs", 4, 1, 16);
+        builder.pop();
+        
+        builder.comment("Notification Settings").push("notifications");
+        ENABLE_PLAYER_NOTIFICATIONS = builder
+            .comment("Send in-game chat notifications to colony players when crafting fails or lacks ingredients (default: true)")
+            .define("enablePlayerNotifications", true);
+        NOTIFICATION_COOLDOWN_SECONDS = builder
+            .comment("Minimum seconds between notifications for the same item to prevent chat spam (default: 60)")
+            .defineInRange("notificationCooldownSeconds", 60, 5, 600);
         builder.pop();
         
         SPEC = builder.build();

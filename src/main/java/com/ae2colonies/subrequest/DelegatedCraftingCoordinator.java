@@ -161,6 +161,15 @@ public class DelegatedCraftingCoordinator {
                 cancelJobSubRequests(job);
                 job.setState(DelegatedJobState.CANCELLED, currentTick);
                 terminal.setChanged();
+
+                com.ae2colonies.colony.ColonyNotificationHelper.sendColonyNotification(
+                        terminal,
+                        job.getTargetStack().getItem(),
+                        net.minecraft.network.chat.Component.translatable(
+                                "message.ae2colonies.delegation_timeout",
+                                job.getTargetStack().getHoverName()
+                        )
+                );
                 continue;
             }
 
