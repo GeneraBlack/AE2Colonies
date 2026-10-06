@@ -16,7 +16,7 @@
   "gui.ae2colonies.redstone_disabled": "Redstone: DEAKTIVIERT",
   "gui.ae2colonies.cancel_craft": "\u2716",
   "gui.ae2colonies.crafting_item": "Craftet: %s",
-  "message.ae2colonies.missing_ingredients": "Crafting für %s fehlgeschlagen: Fehlende Zutaten im ME-Netzwerk: %s",
-  "message.ae2colonies.no_cpu": "Crafting für %s fehlgeschlagen: Keine Crafting-CPU im ME-Netzwerk gefunden! Benötigt einen Crafting-CPU Multiblock.",
-  "message.ae2colonies.delegation_timeout": "Unterauftrag für %s abgelaufen: Kolonie-Arbeiter konnten Zutaten nicht rechtzeitig liefern."
+  "message.ae2colonies.missing_ingredients": "Crafting for %s failed: Missing ingredients in ME network: %s",
+  "message.ae2colonies.no_cpu": "Crafting for %s failed: No Crafting CPU found on ME network! Autocrafting requires a Crafting CPU multiblock.",
+  "message.ae2colonies.delegation_timeout": "Delegated sub-request for %s timed out: Colony workers could not deliver ingredients in time."
 }
