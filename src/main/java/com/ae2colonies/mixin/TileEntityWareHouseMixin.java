@@ -2,6 +2,7 @@ package com.ae2colonies.mixin;
 
 import com.ae2colonies.ae2.AE2IntegrationHelper;
 import com.ae2colonies.blockentity.ColonyTerminalBlockEntity;
+import com.ae2colonies.colony.ColonyNotificationHelper;
 import com.ae2colonies.colony.WarehouseMEBridge;
 import com.minecolonies.api.colony.buildings.workerbuildings.IWareHouse;
 import com.minecolonies.api.inventory.InventoryCitizen;
@@ -66,6 +67,8 @@ public abstract class TileEntityWareHouseMixin {
             IWareHouse warehouse = getWarehouse();
             if (warehouse != null) {
                 int totalAvailable = 0;
+                ColonyTerminalBlockEntity candidateTerminal = null;
+                int candidateNeeded = 0;
                 for (ColonyTerminalBlockEntity terminal : WarehouseMEBridge.getTerminalsForWarehouse(warehouse)) {
                     if (terminal.isTerminalOnline()) {
                         if (terminal.isAllowWithdraw()) {
@@ -112,6 +115,28 @@ public abstract class TileEntityWareHouseMixin {
                                         }
                                     }
                                 }
+
+                                if (candidateTerminal == null) {
+                                    candidateTerminal = terminal;
+                                    candidateNeeded = needed;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (candidateTerminal != null) {
+                    com.minecolonies.api.colony.requestsystem.request.IRequest<? extends com.minecolonies.api.colony.requestsystem.requestable.IDeliverable> activeReq =
+                            com.ae2colonies.colony.WarehouseRequestContext.getCurrentRequest();
+                    if (activeReq != null) {
+                        com.minecolonies.api.colony.requestsystem.requestable.IDeliverable deliverable = activeReq.getRequest();
+                        if (deliverable instanceof com.minecolonies.api.colony.requestsystem.requestable.IConcreteDeliverable concrete) {
+                            for (ItemStack reqStack : concrete.getRequestedItems()) {
+                                if (!reqStack.isEmpty() && itemStackSelectionPredicate.test(reqStack)) {
+                                    ColonyNotificationHelper.checkAndNotifyCraftingFailure(
+                                            candidateTerminal, reqStack, candidateNeeded);
+                                    break;
+                                }
                             }
                         }
                     }
@@ -139,6 +164,9 @@ public abstract class TileEntityWareHouseMixin {
                 com.ae2colonies.AE2Colonies.LOGGER.info("hasMatchingItemStack(Stack): checking AE2 for {} x{} (ignoreNBT={}, leftOver={})", itemStack, count, ignoreNBT, leftOver);
                 int target = count + leftOver;
                 int totalAvailable = 0;
+                ColonyTerminalBlockEntity candidateTerminal = null;
+                int candidateNeeded = 0;
+
                 for (ColonyTerminalBlockEntity terminal : WarehouseMEBridge.getTerminalsForWarehouse(warehouse)) {
                     if (terminal.isTerminalOnline()) {
                         if (terminal.isAllowWithdraw()) {
@@ -165,9 +193,19 @@ public abstract class TileEntityWareHouseMixin {
                                         return;
                                     }
                                 }
+                                if (candidateTerminal == null) {
+                                    candidateTerminal = terminal;
+                                    candidateNeeded = needed;
+                                }
                             }
                         }
                     }
+                }
+
+                // If no terminal could fulfill or craft the item, notify colony players
+                if (candidateTerminal != null) {
+                    ColonyNotificationHelper.checkAndNotifyCraftingFailure(
+                            candidateTerminal, itemStack, candidateNeeded);
                 }
             }
         }

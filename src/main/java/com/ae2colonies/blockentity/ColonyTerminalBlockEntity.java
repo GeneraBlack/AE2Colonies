@@ -255,6 +255,12 @@ public class ColonyTerminalBlockEntity extends AENetworkedBlockEntity
                                                 pending.getStack().getItem(),
                                                 Component.translatable("message.ae2colonies.no_cpu", pending.getStack().getHoverName())
                                         );
+                                    } else if (result != null && result.errorCode() == appeng.api.networking.crafting.CraftingSubmitErrorCode.NO_SUITABLE_CPU_FOUND) {
+                                        com.ae2colonies.colony.ColonyNotificationHelper.sendColonyNotification(
+                                                this,
+                                                pending.getStack().getItem(),
+                                                Component.translatable("message.ae2colonies.cpu_busy", pending.getStack().getHoverName())
+                                        );
                                     }
                                 }
                             } else {

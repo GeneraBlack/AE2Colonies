@@ -311,71 +311,125 @@ public class AE2IntegrationHelper {
             return Collections.emptyList();
         }
 
+        Set<AEKey> visited = new HashSet<>();
+        Map<AEKey, Long> simulatedUsage = new HashMap<>();
+
         for (var pattern : patterns) {
             List<ItemStack> missing = new ArrayList<>();
-            GenericStack primaryOutput = pattern.getPrimaryOutput();
-            if (primaryOutput == null || primaryOutput.amount() <= 0) {
-                continue;
-            }
+            visited.clear();
+            visited.add(key);
+            simulatedUsage.clear();
 
-            long outputAmount = primaryOutput.amount();
-            long batches = (amountNeeded + outputAmount - 1) / outputAmount;
-
-            IPatternDetails.IInput[] inputs = pattern.getInputs();
-            if (inputs == null || inputs.length == 0) {
-                return Collections.emptyList();
-            }
-
-            boolean anyUncraftable = false;
-            for (IPatternDetails.IInput input : inputs) {
-                GenericStack[] possibles = input.getPossibleInputs();
-                if (possibles == null || possibles.length == 0) {
-                    anyUncraftable = true;
-                    break;
-                }
-                long neededPerBatch = input.getMultiplier();
-                long totalNeeded = neededPerBatch * batches;
-
-                boolean satisfied = false;
-                long maxAvailable = 0;
-                AEItemKey bestPossibleKey = null;
-
-                for (GenericStack possible : possibles) {
-                    if (possible == null || possible.what() == null) continue;
-                    if (possible.what() instanceof AEItemKey itemKey) {
-                        bestPossibleKey = itemKey;
-                        long totalInStorage = storage.extract(itemKey, Long.MAX_VALUE, Actionable.SIMULATE, IActionSource.empty());
-                        if (totalInStorage > maxAvailable) {
-                            maxAvailable = totalInStorage;
-                        }
-                        if (totalInStorage >= totalNeeded) {
-                            satisfied = true;
-                            break;
-                        }
-                        if (craftingService.isCraftable(itemKey)) {
-                            satisfied = true;
-                            break;
-                        }
-                    }
-                }
-
-                if (!satisfied && bestPossibleKey != null) {
-                    long remainingShortfall = totalNeeded - maxAvailable;
-                    int maxStack = bestPossibleKey.getItem().getDefaultMaxStackSize();
-                    while (remainingShortfall > 0) {
-                        int chunkSize = (int) Math.min(remainingShortfall, maxStack);
-                        missing.add(bestPossibleKey.toStack(chunkSize));
-                        remainingShortfall -= chunkSize;
-                    }
-                }
-            }
-
-            if (!anyUncraftable && !missing.isEmpty()) {
+            collectMissingIngredients(grid, storage, craftingService, pattern, amountNeeded, 0, visited, simulatedUsage, missing);
+            if (!missing.isEmpty()) {
                 return missing;
             }
         }
 
         return Collections.emptyList();
+    }
+
+    private static void collectMissingIngredients(
+            IGrid grid,
+            MEStorage storage,
+            ICraftingService craftingService,
+            IPatternDetails pattern,
+            long amountNeeded,
+            int depth,
+            Set<AEKey> visited,
+            Map<AEKey, Long> simulatedUsage,
+            List<ItemStack> missingAccumulator
+    ) {
+        if (pattern == null || amountNeeded <= 0 || depth > getMaxCraftDepth()) {
+            return;
+        }
+
+        GenericStack primaryOutput = pattern.getPrimaryOutput();
+        if (primaryOutput == null || primaryOutput.amount() <= 0) {
+            return;
+        }
+
+        long outputAmount = primaryOutput.amount();
+        long batches = (amountNeeded + outputAmount - 1) / outputAmount;
+
+        IPatternDetails.IInput[] inputs = pattern.getInputs();
+        if (inputs == null || inputs.length == 0) {
+            return;
+        }
+
+        for (IPatternDetails.IInput input : inputs) {
+            GenericStack[] possibles = input.getPossibleInputs();
+            if (possibles == null || possibles.length == 0) {
+                continue;
+            }
+            long neededPerBatch = input.getMultiplier();
+            long totalNeeded = neededPerBatch * batches;
+
+            boolean satisfied = false;
+            long maxAvailable = 0;
+            AEItemKey bestPossibleKey = null;
+
+            for (GenericStack possible : possibles) {
+                if (possible == null || possible.what() == null) continue;
+                if (possible.what() instanceof AEItemKey itemKey) {
+                    bestPossibleKey = itemKey;
+                    long alreadyUsed = simulatedUsage.getOrDefault(itemKey, 0L);
+                    long totalInStorage = storage.extract(itemKey, Long.MAX_VALUE, Actionable.SIMULATE, IActionSource.empty());
+                    long available = Math.max(0, totalInStorage - alreadyUsed);
+
+                    if (available > maxAvailable) {
+                        maxAvailable = available;
+                    }
+                    if (available >= totalNeeded) {
+                        simulatedUsage.put(itemKey, alreadyUsed + totalNeeded);
+                        satisfied = true;
+                        break;
+                    }
+                }
+            }
+
+            if (satisfied) {
+                continue;
+            }
+
+            long remainingShortfall = totalNeeded - maxAvailable;
+            boolean subCrafted = false;
+
+            if (depth < getMaxCraftDepth() && bestPossibleKey != null && !visited.contains(bestPossibleKey) && craftingService.isCraftable(bestPossibleKey)) {
+                var subPatterns = craftingService.getCraftingFor(bestPossibleKey);
+                if (!subPatterns.isEmpty()) {
+                    visited.add(bestPossibleKey);
+                    for (var subPattern : subPatterns) {
+                        Map<AEKey, Long> branchSnapshot = new HashMap<>(simulatedUsage);
+                        if (maxAvailable > 0) {
+                            branchSnapshot.put(bestPossibleKey, simulatedUsage.getOrDefault(bestPossibleKey, 0L) + maxAvailable);
+                        }
+
+                        if (hasCraftingIngredients(grid, storage, craftingService, subPattern, remainingShortfall, depth + 1, visited, branchSnapshot)) {
+                            simulatedUsage.clear();
+                            simulatedUsage.putAll(branchSnapshot);
+                            subCrafted = true;
+                            break;
+                        }
+                    }
+                    if (!subCrafted && !subPatterns.isEmpty()) {
+                        collectMissingIngredients(grid, storage, craftingService, subPatterns.iterator().next(), remainingShortfall, depth + 1, visited, simulatedUsage, missingAccumulator);
+                        subCrafted = true;
+                    }
+                    visited.remove(bestPossibleKey);
+                }
+            }
+
+            if (!subCrafted && bestPossibleKey != null) {
+                int maxStack = bestPossibleKey.getItem().getDefaultMaxStackSize();
+                long toAdd = remainingShortfall;
+                while (toAdd > 0) {
+                    int chunkSize = (int) Math.min(toAdd, maxStack);
+                    missingAccumulator.add(bestPossibleKey.toStack(chunkSize));
+                    toAdd -= chunkSize;
+                }
+            }
+        }
     }
 
     private static boolean hasCraftingIngredients(
