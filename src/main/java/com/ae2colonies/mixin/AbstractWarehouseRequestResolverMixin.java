@@ -17,6 +17,30 @@ import java.util.List;
 public abstract class AbstractWarehouseRequestResolverMixin {
 
     @Inject(
+            method = "canResolveRequest",
+            at = @At("HEAD")
+    )
+    private void onCanResolveRequestHead(
+            IRequestManager manager,
+            IRequest<? extends IDeliverable> requestToCheck,
+            CallbackInfoReturnable<Boolean> cir
+    ) {
+        WarehouseRequestContext.setCurrentRequest(requestToCheck);
+    }
+
+    @Inject(
+            method = "canResolveRequest",
+            at = @At("RETURN")
+    )
+    private void onCanResolveRequestReturn(
+            IRequestManager manager,
+            IRequest<? extends IDeliverable> requestToCheck,
+            CallbackInfoReturnable<Boolean> cir
+    ) {
+        WarehouseRequestContext.clear();
+    }
+
+    @Inject(
             method = "attemptResolveRequest",
             at = @At("HEAD")
     )

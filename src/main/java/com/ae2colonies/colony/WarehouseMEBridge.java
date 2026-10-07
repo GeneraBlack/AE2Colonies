@@ -195,6 +195,40 @@ public class WarehouseMEBridge {
     }
 
     @NotNull
+    public static List<ColonyTerminalBlockEntity> getTerminalsForColony(@NotNull IColony colony) {
+        if (shuttingDown) {
+            return Collections.emptyList();
+        }
+
+        List<ColonyTerminalBlockEntity> result = new ArrayList<>();
+        IRegisteredStructureManager sm = colony.getServerBuildingManager();
+        if (sm != null) {
+            List<IWareHouse> warehouses = sm.getWareHouses();
+            if (warehouses != null) {
+                for (IWareHouse wh : warehouses) {
+                    result.addAll(getTerminalsForWarehouse(wh));
+                }
+            }
+        }
+
+        // Also check all registered terminals by colony ID in case warehouse list was empty
+        if (result.isEmpty()) {
+            for (CopyOnWriteArrayList<ColonyTerminalBlockEntity> list : WAREHOUSE_TERMINALS.values()) {
+                for (ColonyTerminalBlockEntity terminal : list) {
+                    if (terminal != null && !terminal.isRemoved() && terminal.getLinkedColonyId() == colony.getID()) {
+                        if (!result.contains(terminal)) {
+                            result.add(terminal);
+                        }
+                    }
+                }
+            }
+        }
+
+        result.sort((a, b) -> Integer.compare(b.getPriority(), a.getPriority()));
+        return Collections.unmodifiableList(result);
+    }
+
+    @NotNull
     public static List<ColonyTerminalBlockEntity> getAllTerminals() {
         List<ColonyTerminalBlockEntity> all = new ArrayList<>();
         for (CopyOnWriteArrayList<ColonyTerminalBlockEntity> list : WAREHOUSE_TERMINALS.values()) {

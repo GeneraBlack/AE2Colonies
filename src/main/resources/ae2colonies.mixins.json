@@ -11,7 +11,8 @@
     "InventoryUtilsMixin",
     "AbstractWarehouseRequestResolverMixin",
     "MinecraftServerMixin",
-    "RequestHandlerMixin"
+    "RequestHandlerMixin",
+    "StandardPlayerRequestResolverMixin"
   ],
   "client": [],
   "injectors": {

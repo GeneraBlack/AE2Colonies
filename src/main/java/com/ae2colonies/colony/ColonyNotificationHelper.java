@@ -10,6 +10,7 @@ import com.minecolonies.api.colony.IColony;
 import com.minecolonies.api.colony.IColonyManager;
 import com.minecolonies.api.colony.buildings.workerbuildings.IWareHouse;
 import appeng.api.networking.IGrid;
+import appeng.api.networking.crafting.ICraftingCPU;
 import appeng.api.networking.crafting.ICraftingService;
 import appeng.api.stacks.AEItemKey;
 import net.minecraft.ChatFormatting;
@@ -42,6 +43,26 @@ public class ColonyNotificationHelper {
     // Cached set of items that have standard crafting recipes in Minecraft
     private static volatile Set<Item> CRAFTABLE_ITEMS = null;
 
+    public static boolean isNotificationEnabled() {
+        try {
+            if (AE2ColoniesConfig.SPEC.isLoaded()) {
+                return AE2ColoniesConfig.ENABLE_PLAYER_NOTIFICATIONS.get();
+            }
+        } catch (Exception ignored) {
+        }
+        return true;
+    }
+
+    public static long getCooldownMs() {
+        try {
+            if (AE2ColoniesConfig.SPEC.isLoaded()) {
+                return AE2ColoniesConfig.NOTIFICATION_COOLDOWN_SECONDS.get() * 1000L;
+            }
+        } catch (Exception ignored) {
+        }
+        return 30000L;
+    }
+
     public static boolean hasCraftingRecipe(@Nullable Level level, @NotNull Item item) {
         if (level == null || level.isClientSide()) {
             return false;
@@ -51,10 +72,13 @@ public class ColonyNotificationHelper {
                 if (CRAFTABLE_ITEMS == null) {
                     Set<Item> set = new HashSet<>();
                     try {
-                        for (RecipeHolder<CraftingRecipe> holder : level.getRecipeManager().getAllRecipesFor(RecipeType.CRAFTING)) {
-                            ItemStack result = holder.value().getResultItem(level.registryAccess());
-                            if (!result.isEmpty()) {
-                                set.add(result.getItem());
+                        for (RecipeHolder<?> holder : level.getRecipeManager().getRecipes()) {
+                            try {
+                                ItemStack result = holder.value().getResultItem(level.registryAccess());
+                                if (!result.isEmpty()) {
+                                    set.add(result.getItem());
+                                }
+                            } catch (Exception ignored) {
                             }
                         }
                     } catch (Exception e) {
@@ -69,14 +93,14 @@ public class ColonyNotificationHelper {
 
     public static boolean isCoolingDown(@NotNull Item item) {
         long now = System.currentTimeMillis();
-        long cooldownMs = AE2ColoniesConfig.NOTIFICATION_COOLDOWN_SECONDS.get() * 1000L;
+        long cooldownMs = getCooldownMs();
         Long lastTime = NOTIFICATION_COOLDOWNS.get(item);
         return lastTime != null && (now - lastTime < cooldownMs);
     }
 
     public static boolean canNotify(@NotNull Item item) {
         long now = System.currentTimeMillis();
-        long cooldownMs = AE2ColoniesConfig.NOTIFICATION_COOLDOWN_SECONDS.get() * 1000L;
+        long cooldownMs = getCooldownMs();
         Long lastTime = NOTIFICATION_COOLDOWNS.get(item);
         if (lastTime == null || now - lastTime >= cooldownMs) {
             NOTIFICATION_COOLDOWNS.put(item, now);
@@ -97,7 +121,7 @@ public class ColonyNotificationHelper {
         if (stack.isEmpty() || needed <= 0) {
             return;
         }
-        if (!AE2ColoniesConfig.ENABLE_PLAYER_NOTIFICATIONS.get()) {
+        if (!isNotificationEnabled()) {
             return;
         }
         if (isCoolingDown(stack.getItem())) {
@@ -166,6 +190,12 @@ public class ColonyNotificationHelper {
                         stack.getItem(),
                         Component.translatable("message.ae2colonies.no_cpu", stack.getHoverName())
                 );
+            } else {
+                sendColonyNotification(
+                        terminal,
+                        stack.getItem(),
+                        Component.translatable("message.ae2colonies.item_not_available", stack.getHoverName())
+                );
             }
             return;
         }
@@ -177,12 +207,18 @@ public class ColonyNotificationHelper {
 
         var patterns = craftingService.getCraftingFor(key);
         if (patterns.isEmpty()) {
-            // No pattern in AE2: check if it has a vanilla/mod crafting recipe
+            // No pattern in AE2: check if it has a recipe
             if (hasCraftingRecipe(terminal.getLevel(), stack.getItem())) {
                 sendColonyNotification(
                         terminal,
                         stack.getItem(),
                         Component.translatable("message.ae2colonies.no_pattern", stack.getHoverName())
+                );
+            } else {
+                sendColonyNotification(
+                        terminal,
+                        stack.getItem(),
+                        Component.translatable("message.ae2colonies.item_not_available", stack.getHoverName())
                 );
             }
             return;
@@ -190,7 +226,6 @@ public class ColonyNotificationHelper {
 
         // Pattern exists, but crafting cannot proceed -> find missing ingredients
         List<ItemStack> missing = AE2IntegrationHelper.findMissingIngredients(grid, stack, needed);
-        String missingStr;
         if (!missing.isEmpty()) {
             Map<String, Integer> counts = new LinkedHashMap<>();
             for (ItemStack mis : missing) {
@@ -198,16 +233,29 @@ public class ColonyNotificationHelper {
             }
             List<String> parts = new ArrayList<>();
             counts.forEach((name, qty) -> parts.add(qty + "x " + name));
-            missingStr = String.join(", ", parts);
-        } else {
-            missingStr = "?";
-        }
+            String missingStr = String.join(", ", parts);
 
-        sendColonyNotification(
-                terminal,
-                stack.getItem(),
-                Component.translatable("message.ae2colonies.missing_ingredients", stack.getHoverName(), missingStr)
-        );
+            sendColonyNotification(
+                    terminal,
+                    stack.getItem(),
+                    Component.translatable("message.ae2colonies.missing_ingredients", stack.getHoverName(), missingStr)
+            );
+        } else {
+            boolean allCpusBusy = craftingService.getCpus().stream().allMatch(ICraftingCPU::isBusy);
+            if (allCpusBusy) {
+                sendColonyNotification(
+                        terminal,
+                        stack.getItem(),
+                        Component.translatable("message.ae2colonies.cpu_busy", stack.getHoverName())
+                );
+            } else {
+                sendColonyNotification(
+                        terminal,
+                        stack.getItem(),
+                        Component.translatable("message.ae2colonies.missing_ingredients", stack.getHoverName(), "?")
+                );
+            }
+        }
     }
 
     /**
@@ -222,7 +270,7 @@ public class ColonyNotificationHelper {
             @Nullable Item itemForCooldown,
             @NotNull Component message
     ) {
-        if (!AE2ColoniesConfig.ENABLE_PLAYER_NOTIFICATIONS.get()) {
+        if (!isNotificationEnabled()) {
             return;
         }
 
@@ -254,43 +302,65 @@ public class ColonyNotificationHelper {
         Set<Player> recipients = new HashSet<>();
         MinecraftServer server = level.getServer();
 
-        if (server != null && colony != null) {
-            // 1. All registered colony players (owner, officers, members) who are currently online
+        if (server != null) {
+            // 1. Placer / owner of the Colony Terminal
             try {
-                for (UUID uuid : colony.getPermissions().getPlayers().keySet()) {
-                    ServerPlayer sp = server.getPlayerList().getPlayer(uuid);
-                    if (sp != null) {
-                        recipients.add(sp);
+                if (terminal.getActionableNode() != null && terminal.getActionableNode().getOwningPlayerProfileId() != null) {
+                    ServerPlayer placer = server.getPlayerList().getPlayer(terminal.getActionableNode().getOwningPlayerProfileId());
+                    if (placer != null) {
+                        recipients.add(placer);
                     }
                 }
-            } catch (Exception e) {
-                AE2Colonies.LOGGER.debug("Could not get colony players by UUID: {}", e.getMessage());
+            } catch (Exception ignored) {
             }
 
-            // 2. Any online player currently located inside the colony territory
-            try {
+            // 2. Colony owner, officers, and members
+            if (colony != null) {
+                try {
+                    // Colony Owner
+                    if (colony.getPermissions().getOwnerEntry() != null) {
+                        ServerPlayer owner = server.getPlayerList().getPlayer(colony.getPermissions().getOwnerEntry().getKey());
+                        if (owner != null) {
+                            recipients.add(owner);
+                        }
+                    }
+                    // All players registered in colony permissions
+                    for (UUID uuid : colony.getPermissions().getPlayers().keySet()) {
+                        ServerPlayer sp = server.getPlayerList().getPlayer(uuid);
+                        if (sp != null) {
+                            recipients.add(sp);
+                        }
+                    }
+                    // All online colony members
+                    for (ServerPlayer sp : server.getPlayerList().getPlayers()) {
+                        if (colony.getPermissions().isColonyMember(sp)) {
+                            recipients.add(sp);
+                        }
+                    }
+                    // Any online player inside colony territory
+                    for (ServerPlayer sp : server.getPlayerList().getPlayers()) {
+                        if (sp.level() == level && colony.isCoordInColony(level, sp.blockPosition())) {
+                            recipients.add(sp);
+                        }
+                    }
+                } catch (Exception e) {
+                    AE2Colonies.LOGGER.debug("Could not get colony players: {}", e.getMessage());
+                }
+            }
+
+            // 3. Fallback: Any players within 256 blocks of the terminal
+            if (recipients.isEmpty()) {
                 for (ServerPlayer sp : server.getPlayerList().getPlayers()) {
-                    if (sp.level() == level && colony.isCoordInColony(level, sp.blockPosition())) {
+                    if (sp.level() == level && sp.blockPosition().closerThan(terminal.getBlockPos(), 256.0)) {
                         recipients.add(sp);
                     }
                 }
-            } catch (Exception e) {
-                AE2Colonies.LOGGER.debug("Could not get players in colony territory: {}", e.getMessage());
             }
-        }
 
-        // 3. Fallback: Any players within 128 blocks of the terminal
-        if (recipients.isEmpty() && server != null) {
-            for (ServerPlayer sp : server.getPlayerList().getPlayers()) {
-                if (sp.level() == level && sp.blockPosition().closerThan(terminal.getBlockPos(), 128.0)) {
-                    recipients.add(sp);
-                }
+            // 4. Ultimate fallback: ALL online players on the server
+            if (recipients.isEmpty()) {
+                recipients.addAll(server.getPlayerList().getPlayers());
             }
-        }
-
-        // 4. Ultimate fallback: if still empty on single-player / small server, send to all online players
-        if (recipients.isEmpty() && server != null && server.getPlayerList().getPlayerCount() <= 2) {
-            recipients.addAll(server.getPlayerList().getPlayers());
         }
 
         MutableComponent formatted = Component.literal("[AE2 Colonies] ")

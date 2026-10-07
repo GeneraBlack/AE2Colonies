@@ -50,6 +50,9 @@ public abstract class InventoryUtilsMixin {
             boolean matchNBT = !stack.ignoreNBT();
             int total = current;
 
+            ColonyTerminalBlockEntity candidateTerminal = null;
+            int candidateNeeded = 0;
+
             for (ColonyTerminalBlockEntity terminal : terminals) {
                 if (!terminal.isTerminalOnline()) {
                     continue;
@@ -72,14 +75,24 @@ public abstract class InventoryUtilsMixin {
                     if (needed > 0) {
                         if (terminal.canSynthesizeDOBlock(is, needed)
                                 || terminal.isCrafting(is)
-                                || AE2IntegrationHelper.canCraft(terminal.getGrid(), is, needed)) {
+                                || AE2IntegrationHelper.canCraft(terminal.getGrid(), is, needed)
+                                || terminal.getDelegationCoordinator().canDelegate(is, needed)) {
                             total += needed;
                             AE2Colonies.LOGGER.debug("InventoryUtilsMixin(Storage): AE2 can craft {} (total now {})", is, total);
                             cir.setReturnValue(total);
                             return;
                         }
+                        if (candidateTerminal == null) {
+                            candidateTerminal = terminal;
+                            candidateNeeded = needed;
+                        }
                     }
                 }
+            }
+
+            if (candidateTerminal != null && total < count) {
+                com.ae2colonies.colony.ColonyNotificationHelper.checkAndNotifyCraftingFailure(
+                        candidateTerminal, is, candidateNeeded);
             }
 
             if (total > current) {
@@ -142,7 +155,9 @@ public abstract class InventoryUtilsMixin {
                                     if (terminal.isCraftingFailedRecently(candidate)) {
                                         continue;
                                     }
-                                    if (terminal.isCrafting(candidate) || AE2IntegrationHelper.canCraft(terminal.getGrid(), candidate, needed)) {
+                                    if (terminal.isCrafting(candidate)
+                                            || AE2IntegrationHelper.canCraft(terminal.getGrid(), candidate, needed)
+                                            || terminal.getDelegationCoordinator().canDelegate(candidate, needed)) {
                                         total += needed;
                                         AE2Colonies.LOGGER.debug("InventoryUtilsMixin(Predicate): AE2 can craft {} (total now {})", candidate, total);
                                         cir.setReturnValue(total);
